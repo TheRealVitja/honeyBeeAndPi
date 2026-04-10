@@ -1,4 +1,4 @@
-# honeyBeeAndPi – ESP32 Hive System
+# BeeWeight – ESP32 Hive Scale System
 
 ## Features
 

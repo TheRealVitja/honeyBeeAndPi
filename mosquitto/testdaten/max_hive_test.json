@@ -1,0 +1,26 @@
+{
+  "schema": "telemetry.v4",
+  "device_id": "waage-max",
+  "temperature_c": 20.0,
+  "battery_v": 4.0,
+  "rssi": -50,
+  "sleep_seconds": 300,
+  "firmware_version": "v7",
+  "active_hives": 4,
+  "channels": [
+    {"channel_index":0,"hive_index":0,"hive_name":"A","weight_kg":5},
+    {"channel_index":1,"hive_index":0,"hive_name":"A","weight_kg":6},
+    {"channel_index":2,"hive_index":1,"hive_name":"B","weight_kg":7},
+    {"channel_index":3,"hive_index":1,"hive_name":"B","weight_kg":8},
+    {"channel_index":4,"hive_index":2,"hive_name":"C","weight_kg":9},
+    {"channel_index":5,"hive_index":2,"hive_name":"C","weight_kg":10},
+    {"channel_index":6,"hive_index":3,"hive_name":"D","weight_kg":11},
+    {"channel_index":7,"hive_index":3,"hive_name":"D","weight_kg":12}
+  ],
+  "hives": [
+    {"hive_index":0,"hive_name":"A","channel_count":2,"weight_kg":11},
+    {"hive_index":1,"hive_name":"B","channel_count":2,"weight_kg":15},
+    {"hive_index":2,"hive_name":"C","channel_count":2,"weight_kg":19},
+    {"hive_index":3,"hive_name":"D","channel_count":2,"weight_kg":23}
+  ]
+}

@@ -1,0 +1,87 @@
+version: "3.9"
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: iot-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: iot-influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    env_file:
+      - .env
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_USERNAME}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_PASSWORD}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ORG}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_TOKEN}
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+      - influxdb-config:/etc/influxdb2
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: iot-grafana
+    restart: unless-stopped
+    depends_on:
+      - influxdb
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+
+  bridge:
+    build:
+      context: ./bridge
+    container_name: iot-bridge
+    restart: unless-stopped
+    depends_on:
+      - mosquitto
+      - influxdb
+    env_file:
+      - .env
+    environment:
+      MQTT_BROKER: tcp://mosquitto:1883
+      MQTT_TOPIC: devices/+/telemetry
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_ORG: ${INFLUXDB_ORG}
+      INFLUX_BUCKET: ${INFLUXDB_BUCKET}
+      INFLUX_TOKEN: ${INFLUXDB_TOKEN}
+
+  trend-worker:
+    build:
+      context: ./trend-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_ORG: ${INFLUXDB_ORG}
+      INFLUX_BUCKET: ${INFLUXDB_BUCKET}
+      INFLUX_TOKEN: ${INFLUXDB_TOKEN}
+      TREND_RECOMPUTE_INTERVAL: 5m
+      TREND_LOOKBACK: 48h
+      TREND_SUDDEN_DROP_KG: 2.0
+      TREND_SUDDEN_GAIN_KG: 3.0
+volumes:
+  influxdb-data:
+  influxdb-config:
+  grafana-data:

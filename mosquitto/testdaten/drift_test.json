@@ -1,0 +1,33 @@
+{
+  "schema": "telemetry.v4",
+  "device_id": "waage-drift",
+  "temperature_c": 25.0,
+  "battery_v": 3.7,
+  "rssi": -65,
+  "sleep_seconds": 300,
+  "firmware_version": "v7",
+  "active_hives": 1,
+  "channels": [
+    {
+      "channel_index": 0,
+      "channel_name": "K0",
+      "hive_index": 0,
+      "hive_name": "Beute 0",
+      "weight_kg": 15.2,
+      "raw_stddev": 120.0,
+      "raw_slope": 25.0,
+      "drift_detected": true,
+      "stable": false,
+      "calibrated": true,
+      "ready": true
+    }
+  ],
+  "hives": [
+    {
+      "hive_index": 0,
+      "hive_name": "Beute 0",
+      "channel_count": 1,
+      "weight_kg": 15.2
+    }
+  ]
+}

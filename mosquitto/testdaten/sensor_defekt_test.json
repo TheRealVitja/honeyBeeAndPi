@@ -1,0 +1,47 @@
+{
+  "schema": "telemetry.v4",
+  "device_id": "waage-error",
+  "timestamp": "2026-04-09T19:10:00Z",
+  "temperature_c": 18.0,
+  "battery_v": 3.6,
+  "rssi": -75,
+  "sleep_seconds": 300,
+  "firmware_version": "v7",
+  "active_hives": 2,
+  "channels": [
+    {
+      "channel_index": 0,
+      "hive_index": 0,
+      "hive_name": "Beute 0",
+      "weight_kg": 10.0,
+      "ready": true
+    },
+    {
+      "channel_index": 1,
+      "hive_index": 0,
+      "hive_name": "Beute 0",
+      "ready": false
+    },
+    {
+      "channel_index": 2,
+      "hive_index": 1,
+      "hive_name": "Beute 1",
+      "weight_kg": 12.5,
+      "ready": true
+    }
+  ],
+  "hives": [
+    {
+      "hive_index": 0,
+      "hive_name": "Beute 0",
+      "channel_count": 2,
+      "weight_kg": 10.0
+    },
+    {
+      "hive_index": 1,
+      "hive_name": "Beute 1",
+      "channel_count": 1,
+      "weight_kg": 12.5
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+# Go
+bin/
+dist/
+
+# Arduino / Build
+build/
+*.bin
+*.elf
+*.map
+
+# Python / allgemein
+__pycache__/
+*.pyc
+
+# Linux / Editor
+.DS_Store
+.vscode/
+.idea/
+
+# Docker volumes / lokale Daten
+influxdb-data/
+grafana-data/
