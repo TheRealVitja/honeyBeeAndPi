@@ -105,6 +105,9 @@ struct RuntimeConfig {
   String otaPassword;
   int activeHiveCount;
   char hiveNames[MAX_HIVES][20];
+  int gtsStartYear;
+  float gtsStartValue;
+  bool gtsStartConfigured;
 };
 
 struct ChannelReading {
@@ -167,6 +170,9 @@ void setDefaultConfig() {
   strlcpy(cfg.hiveNames[1], "Beute 1", sizeof(cfg.hiveNames[1]));
   strlcpy(cfg.hiveNames[2], "Beute 2", sizeof(cfg.hiveNames[2]));
   strlcpy(cfg.hiveNames[3], "Beute 3", sizeof(cfg.hiveNames[3]));
+  cfg.gtsStartYear = prefs.getInt("gts_year", 0);
+  cfg.gtsStartValue = prefs.getFloat("gts_value", 0.0f);
+  cfg.gtsStartConfigured = prefs.getBool("gts_cfg", false);
 
   for (int i = 0; i < MAX_CHANNELS; i++) {
     chCfg[i].enabled = i < 4;
@@ -201,6 +207,9 @@ void saveBasicConfig() {
   prefs.putUInt("ota_win_s", cfg.otaWindowSeconds);
   prefs.putString("ota_pass", cfg.otaPassword);
   prefs.putInt("hive_count", cfg.activeHiveCount);
+  prefs.putInt("gts_year", cfg.gtsStartYear);
+  prefs.putFloat("gts_value", cfg.gtsStartValue);
+  prefs.putBool("gts_cfg", cfg.gtsStartConfigured);
   for (int h = 0; h < MAX_HIVES; h++) {
     prefs.putString(("hive_name_" + String(h)).c_str(), String(cfg.hiveNames[h]));
   }
@@ -523,6 +532,10 @@ String buildTelemetryPayload(float temperatureC, float batteryV, int rssi, Chann
   doc["sleep_seconds"] = cfg.sleepSeconds;
   doc["firmware_version"] = "esp32-telemetry-v7-dynamic";
   doc["active_hives"] = cfg.activeHiveCount;
+  if (cfg.gtsStartConfigured) {
+  doc["gts_start_year"] = cfg.gtsStartYear;
+  doc["gts_start_value"] = cfg.gtsStartValue;
+}
 
   JsonArray channels = doc.createNestedArray("channels");
   float hiveWeight[MAX_HIVES] = {0,0,0,0};
@@ -615,6 +628,8 @@ void enterDeepSleep() {
 void handleRoot() {
   String html = htmlHeader("ESP32 Setup");
   html += "<div class='card'><form method='POST' action='/save'>";
+  html += "<label>GTS Startjahr (optional)</label><input name='gts_year' value='" + String(cfg.gtsStartYear) + "'>";
+  html += "<label>GTS Startwert (optional)</label><input name='gts_value' value='" + String(cfg.gtsStartValue, 2) + "'>";
   html += "<label>WLAN SSID</label><input name='wifi_ssid' value='" + cfg.wifiSSID + "'>";
   html += "<label>WLAN Passwort</label><input type='password' name='wifi_pass' value='" + cfg.wifiPassword + "'>";
   html += "<label>MQTT Host</label><input name='mqtt_host' value='" + cfg.mqttHost + "'>";
@@ -649,6 +664,23 @@ void handleSave() {
   uint32_t otaWinS = (uint32_t)server.arg("ota_win_s").toInt();
   int hiveCount = server.arg("hive_count").toInt();
   String otaPass = server.arg("ota_pass");
+  String gtsYearStr = server.arg("gts_year");
+String gtsValueStr = server.arg("gts_value");
+
+if ((gtsYearStr.length() == 0) != (gtsValueStr.length() == 0)) {
+  server.send(400, "text/plain", "GTS Startjahr und GTS Startwert muessen entweder beide gesetzt oder beide leer sein");
+  return;
+}
+
+if (gtsYearStr.length() > 0) {
+  cfg.gtsStartYear = gtsYearStr.toInt();
+  cfg.gtsStartValue = gtsValueStr.toFloat();
+  cfg.gtsStartConfigured = true;
+} else {
+  cfg.gtsStartYear = 0;
+  cfg.gtsStartValue = 0.0f;
+  cfg.gtsStartConfigured = false;
+}
 
   if (wifiSSID.isEmpty() || mqttHost.isEmpty() || mqttPort == 0 || deviceID.isEmpty() || sleepS == 0) {
     server.send(400, "text/plain", "Ungueltige Eingaben");
