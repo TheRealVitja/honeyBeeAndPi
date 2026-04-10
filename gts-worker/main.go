@@ -352,7 +352,7 @@ func main() {
 	influxToken := strings.TrimSpace(os.Getenv("INFLUX_TOKEN"))
 	influxOrg := getenvDefault("INFLUX_ORG", "myorg")
 	influxBucket := getenvDefault("INFLUX_BUCKET", "telemetry")
-	lookback := mustDurationEnv("GTS_LOOKBACK", "400d")
+	lookback := mustDurationEnv("GTS_LOOKBACK", "9600h") // 400 days
 	recomputeInterval := mustDurationEnv("GTS_RECOMPUTE_INTERVAL", "30m")
 	tzName := getenvDefault("GTS_TIMEZONE", "Europe/Berlin")
 
