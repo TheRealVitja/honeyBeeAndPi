@@ -10,7 +10,7 @@
 
 - **WLAN & Konfigurationsportal**
   - Automatischer Access Point bei fehlender Konfiguration
-  - Weboberfläche zur Einrichtung (WLAN, MQTT, Geräte-ID)
+  - Weboberfläche zur Einrichtung (WLAN, MQTT, Geräte-ID, GTS, Beuten, Kalibrierung der Waagen)
   - Persistente Speicherung via Preferences
 
 - **MQTT-Telemetrie**
@@ -38,7 +38,7 @@
 ### Hardware
 - ESP32
 - HX711 + Wägezellen
-- DS18B20 (optional)
+- DS18B20 (Temperaturfühler)
 - Raspberry Pi (für Backend)
 - WLAN-Netz
 
@@ -55,7 +55,8 @@
 .
 ├── esp32/                 # Firmware
 ├── bridge/                # Go MQTT Bridge
-├── trend-worker/          # Optionaler Worker
+├── trend-worker/          # Optionaler Trend Worker
+├── gts-worker/            # Go GrünlandTemperaturSumme
 ├── docker-compose.yml
 ```
 
