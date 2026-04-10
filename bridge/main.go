@@ -10,7 +10,7 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
-	apiWrite "github.com/influxdata/influxdb-client-go/v2/api"
+	"github.com/influxdata/influxdb-client-go/v2/api"
 	"github.com/influxdata/influxdb-client-go/v2/api/write"
 )
 
@@ -53,6 +53,8 @@ type Payload struct {
 	SleepSeconds    *int               `json:"sleep_seconds"`
 	FirmwareVersion string             `json:"firmware_version"`
 	ActiveHives     *int               `json:"active_hives"`
+	GTSStartYear    *int               `json:"gts_start_year"`
+	GTSStartValue   *float64           `json:"gts_start_value"`
 	Channels        []ChannelTelemetry `json:"channels"`
 	Hives           []HiveTelemetry    `json:"hives"`
 }
@@ -90,13 +92,18 @@ func parseTimestamp(ts string) time.Time {
 	return t.UTC()
 }
 
-func writeDevicePoint(writeAPI apiWrite.WriteAPIBlocking, p Payload, ts time.Time) error {
-	fields := map[string]interface{}{}
+func writeDevicePoint(writeAPI api.WriteAPIBlocking, p Payload, ts time.Time) error {
+	fields := map[string]interface{}{
+		"present": 1,
+	}
 	addFloatField(fields, "temperature_c", p.TemperatureC)
 	addFloatField(fields, "battery_v", p.BatteryV)
 	addIntField(fields, "rssi", p.RSSI)
 	addIntField(fields, "sleep_seconds", p.SleepSeconds)
 	addIntField(fields, "active_hives", p.ActiveHives)
+	addIntField(fields, "gts_start_year", p.GTSStartYear)
+	addFloatField(fields, "gts_start_value", p.GTSStartValue)
+
 	if p.FirmwareVersion != "" {
 		fields["firmware_version_present"] = 1
 	}
@@ -113,9 +120,11 @@ func writeDevicePoint(writeAPI apiWrite.WriteAPIBlocking, p Payload, ts time.Tim
 	return writeAPI.WritePoint(context.Background(), point)
 }
 
-func writeChannelPoints(writeAPI apiWrite.WriteAPIBlocking, p Payload, ts time.Time) error {
+func writeChannelPoints(writeAPI api.WriteAPIBlocking, p Payload, ts time.Time) error {
 	for _, ch := range p.Channels {
-		fields := map[string]interface{}{}
+		fields := map[string]interface{}{
+			"present": 1,
+		}
 		addFloatField(fields, "weight_kg", ch.WeightKG)
 		addFloatField(fields, "compensated_weight_kg", ch.CompensatedWeightKG)
 		addFloatField(fields, "raw_avg", ch.RawAvg)
@@ -155,9 +164,11 @@ func writeChannelPoints(writeAPI apiWrite.WriteAPIBlocking, p Payload, ts time.T
 	return nil
 }
 
-func writeHivePoints(writeAPI apiWrite.WriteAPIBlocking, p Payload, ts time.Time) error {
+func writeHivePoints(writeAPI api.WriteAPIBlocking, p Payload, ts time.Time) error {
 	for _, hive := range p.Hives {
-		fields := map[string]interface{}{}
+		fields := map[string]interface{}{
+			"present": 1,
+		}
 		addFloatField(fields, "weight_kg", hive.WeightKG)
 		addFloatField(fields, "compensated_weight_kg", hive.CompensatedWeightKG)
 		addIntField(fields, "channel_count", hive.ChannelCount)
@@ -207,7 +218,7 @@ func main() {
 
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(mqttBroker)
-	opts.SetClientID("iot-bridge-v4")
+	opts.SetClientID("iot-bridge-v4-gts")
 	opts.SetAutoReconnect(true)
 	opts.SetConnectRetry(true)
 	opts.SetCleanSession(true)
@@ -246,7 +257,7 @@ func main() {
 			return
 		}
 
-		log.Printf("ingested device=%s channels=%d hives=%d", p.DeviceID, len(p.Channels), len(p.Hives))
+		log.Printf("ingested device=%s channels=%d hives=%d gts_start_year=%v gts_start_value=%v", p.DeviceID, len(p.Channels), len(p.Hives), p.GTSStartYear, p.GTSStartValue)
 	}); sub.Wait() && sub.Error() != nil {
 		log.Fatalf("mqtt subscribe: %v", sub.Error())
 	}

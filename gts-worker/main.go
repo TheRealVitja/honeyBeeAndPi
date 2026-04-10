@@ -26,25 +26,25 @@ type TempSample struct {
 }
 
 type DailyTemp struct {
-	DeviceID       string
-	Date           time.Time
-	Year           int
-	DayOfYear      int
-	TempAvgC       float64
-	GTSStartYear   *int
-	GTSStartValue  *float64
+	DeviceID      string
+	Date          time.Time
+	Year          int
+	DayOfYear     int
+	TempAvgC      float64
+	GTSStartYear  *int
+	GTSStartValue *float64
 }
 
 type GTSDaily struct {
-	DeviceID       string
-	Date           time.Time
-	Year           int
-	DayOfYear      int
-	TempAvgC       float64
-	Increment      float64
-	GTSValue       float64
-	GTSStartYear   *int
-	GTSStartValue  *float64
+	DeviceID      string
+	Date          time.Time
+	Year          int
+	DayOfYear     int
+	TempAvgC      float64
+	Increment     float64
+	GTSValue      float64
+	GTSStartYear  *int
+	GTSStartValue *float64
 }
 
 type seriesKey struct {
@@ -180,15 +180,15 @@ from(bucket: %q)
 
 func aggregateDaily(samples []TempSample, tz *time.Location) []DailyTemp {
 	type agg struct {
-		deviceID       string
-		date           time.Time
-		year           int
-		dayOfYear      int
-		sum            float64
-		count          int
-		gtsStartYear   *int
-		gtsStartValue  *float64
-		lastSeen       time.Time
+		deviceID      string
+		date          time.Time
+		year          int
+		dayOfYear     int
+		sum           float64
+		count         int
+		gtsStartYear  *int
+		gtsStartValue *float64
+		lastSeen      time.Time
 	}
 
 	grouped := map[seriesKey]*agg{}
@@ -382,12 +382,9 @@ func main() {
 	ticker := time.NewTicker(recomputeInterval)
 	defer ticker.Stop()
 
-	for {
-		select {
-		case <-ticker.C:
-			if err := recomputeGTS(ctx, queryAPI, writeAPI, influxBucket, lookback, tz); err != nil {
-				log.Printf("GTS recompute failed: %v", err)
-			}
+	for range ticker.C {
+		if err := recomputeGTS(ctx, queryAPI, writeAPI, influxBucket, lookback, tz); err != nil {
+			log.Printf("GTS recompute failed: %v", err)
 		}
 	}
 }

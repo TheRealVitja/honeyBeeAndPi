@@ -47,7 +47,7 @@
       },
       "targets": [
         {
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"device_telemetry\")\n  |> filter(fn: (r) => r._field == \"temperature_c\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")\n  |> yield(name: \"temperature\")",
+          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"device_telemetry\")\n  |> filter(fn: (r) => r._field == \"temperature_c\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")",
           "refId": "A"
         }
       ],
@@ -80,7 +80,7 @@
       },
       "targets": [
         {
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"device_telemetry\")\n  |> filter(fn: (r) => r._field == \"battery_v\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")\n  |> yield(name: \"battery\")",
+          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"device_telemetry\")\n  |> filter(fn: (r) => r._field == \"battery_v\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")",
           "refId": "A"
         }
       ],
@@ -113,7 +113,7 @@
       },
       "targets": [
         {
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"device_telemetry\")\n  |> filter(fn: (r) => r._field == \"rssi\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")\n  |> yield(name: \"rssi\")",
+          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"device_telemetry\")\n  |> filter(fn: (r) => r._field == \"rssi\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")",
           "refId": "A"
         }
       ],
@@ -132,7 +132,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
+        "h": 8,
         "w": 12,
         "x": 0,
         "y": 8
@@ -146,7 +146,7 @@
       },
       "targets": [
         {
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"hive_telemetry\")\n  |> filter(fn: (r) => r._field == \"weight_kg\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")\n  |> filter(fn: (r) => \"${hive}\" == \"all\" or r.hive_index == \"${hive}\")\n  |> yield(name: \"hive_weight\")",
+          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"hive_telemetry\")\n  |> filter(fn: (r) => r._field == \"weight_kg\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")\n  |> filter(fn: (r) => \"${hive}\" == \"all\" or r.hive_index == \"${hive}\")",
           "refId": "A"
         }
       ],
@@ -165,7 +165,7 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
+        "h": 8,
         "w": 12,
         "x": 12,
         "y": 8
@@ -179,7 +179,7 @@
       },
       "targets": [
         {
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"hive_telemetry\")\n  |> filter(fn: (r) => r._field == \"compensated_weight_kg\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")\n  |> filter(fn: (r) => \"${hive}\" == \"all\" or r.hive_index == \"${hive}\")\n  |> yield(name: \"hive_comp_weight\")",
+          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"hive_telemetry\")\n  |> filter(fn: (r) => r._field == \"compensated_weight_kg\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")\n  |> filter(fn: (r) => \"${hive}\" == \"all\" or r.hive_index == \"${hive}\")",
           "refId": "A"
         }
       ],
@@ -198,10 +198,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 9,
+        "h": 8,
         "w": 12,
         "x": 0,
-        "y": 17
+        "y": 16
       },
       "id": 6,
       "options": {
@@ -212,44 +212,11 @@
       },
       "targets": [
         {
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"channel_telemetry\")\n  |> filter(fn: (r) => r._field == \"weight_kg\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")\n  |> filter(fn: (r) => \"${channel}\" == \"all\" or r.channel_index == \"${channel}\")\n  |> yield(name: \"channel_weight\")",
+          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"channel_telemetry\")\n  |> filter(fn: (r) => r._field == \"weight_kg\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")\n  |> filter(fn: (r) => \"${channel}\" == \"all\" or r.channel_index == \"${channel}\")",
           "refId": "A"
         }
       ],
       "title": "Kanalgewicht roh",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "influxdb",
-        "uid": "influxdb"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "kg"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 9,
-        "w": 12,
-        "x": 12,
-        "y": 17
-      },
-      "id": 7,
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom"
-        }
-      },
-      "targets": [
-        {
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"channel_telemetry\")\n  |> filter(fn: (r) => r._field == \"compensated_weight_kg\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")\n  |> filter(fn: (r) => \"${channel}\" == \"all\" or r.channel_index == \"${channel}\")\n  |> yield(name: \"channel_comp_weight\")",
-          "refId": "A"
-        }
-      ],
-      "title": "Kanalgewicht temperaturkompensiert",
       "type": "timeseries"
     },
     {
@@ -266,10 +233,10 @@
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
-        "y": 26
+        "x": 12,
+        "y": 16
       },
-      "id": 8,
+      "id": 7,
       "options": {
         "legend": {
           "displayMode": "table",
@@ -278,11 +245,11 @@
       },
       "targets": [
         {
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"channel_telemetry\")\n  |> filter(fn: (r) => r._field == \"raw_stddev\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")\n  |> filter(fn: (r) => \"${channel}\" == \"all\" or r.channel_index == \"${channel}\")\n  |> yield(name: \"stddev\")",
+          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"channel_telemetry\")\n  |> filter(fn: (r) => r._field == \"drift_detected\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")\n  |> filter(fn: (r) => \"${channel}\" == \"all\" or r.channel_index == \"${channel}\")",
           "refId": "A"
         }
       ],
-      "title": "Kanal Rohsignal StdDev",
+      "title": "Kanal Drift erkannt",
       "type": "timeseries"
     },
     {
@@ -292,54 +259,96 @@
       },
       "fieldConfig": {
         "defaults": {
-          "mappings": [
-            {
-              "options": {
-                "0": {
-                  "text": "Nein"
-                },
-                "1": {
-                  "text": "Ja"
-                }
-              },
-              "type": "value"
-            }
-          ],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green"
-              },
-              {
-                "color": "red",
-                "value": 1
-              }
-            ]
-          }
+          "unit": "short"
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
-        "w": 12,
-        "x": 12,
-        "y": 26
+        "w": 8,
+        "x": 0,
+        "y": 24
       },
-      "id": 9,
+      "id": 8,
       "options": {
         "legend": {
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "bottom"
         }
       },
       "targets": [
         {
-          "query": "from(bucket: \"telemetry\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"channel_telemetry\")\n  |> filter(fn: (r) => r._field == \"drift_detected\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")\n  |> filter(fn: (r) => \"${channel}\" == \"all\" or r.channel_index == \"${channel}\")\n  |> yield(name: \"drift\")",
+          "query": "from(bucket: \"telemetry\")\n  |> range(start: -365d, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"device_telemetry\")\n  |> filter(fn: (r) => r._field == \"gts_start_year\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")",
           "refId": "A"
         }
       ],
-      "title": "Kanal Drift erkannt",
+      "title": "GTS Startjahr",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 24
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"telemetry\")\n  |> range(start: -365d, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"device_telemetry\")\n  |> filter(fn: (r) => r._field == \"gts_start_value\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")",
+          "refId": "A"
+        }
+      ],
+      "title": "GTS Startwert",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "influxdb",
+        "uid": "influxdb"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 24
+      },
+      "id": 10,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        }
+      },
+      "targets": [
+        {
+          "query": "from(bucket: \"telemetry\")\n  |> range(start: -365d, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"gts_daily\")\n  |> filter(fn: (r) => r._field == \"gts_value\")\n  |> filter(fn: (r) => r.device_id == \"${device}\")",
+          "refId": "A"
+        }
+      ],
+      "title": "Grünlandtemperatursumme (GTS)",
       "type": "timeseries"
     }
   ],
@@ -350,7 +359,8 @@
     "iot",
     "esp32",
     "hx711",
-    "telemetry.v4"
+    "telemetry.v4",
+    "gts"
   ],
   "templating": {
     "list": [
@@ -480,11 +490,11 @@
     ]
   },
   "time": {
-    "from": "now-24h",
+    "from": "now-30d",
     "to": "now"
   },
   "timezone": "browser",
-  "title": "ESP32 IoT Telemetry v4",
+  "title": "ESP32 IoT Telemetry v4 + GTS",
   "version": 1,
   "weekStart": ""
 }
