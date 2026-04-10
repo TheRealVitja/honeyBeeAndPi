@@ -94,18 +94,5 @@ Wichtige Bereiche:
 ## Wichtige Hinweise
 - Jeder Kanal muss einzeln kalibriert werden.
 - Erst danach werden die kalibrierten Gewichte pro Beute summiert.
-- Genau das ist für zwei Wägezellen pro Beute der richtige Weg.
-- `telemetry.v4` ist neu. Dein Go-Bridge-Backend und Grafana-Dashboard müssten als nächstes darauf erweitert werden.
 
-## Standard-Pins
-Vorgeschlagen für bis zu 8 Kanaele:
 
-- DOUT: 16, 18, 21, 23, 26, 27, 32, 33
-- SCK:  17, 19, 22, 25, 13, 14, 12, 15
-
-Bitte vor echtem Aufbau gegen dein ESP32-Board und problematische Boot-Pins pruefen.
-
-## Naechster sinnvoller Schritt
-Als naechstes solltest du:
-- die Go-Bridge auf `telemetry.v4` erweitern
-- Grafana um Panels fuer `channels` und `hives` erweitern

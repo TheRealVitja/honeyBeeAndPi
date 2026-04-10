@@ -169,7 +169,7 @@ Panel:
 
 ---
 
-## 9. Nächste Schritte
+## 9. ToDos
 
 - Alerts (Gewichtsverlust)
 - Drift-Analyse im Backend
