@@ -8,45 +8,38 @@ services:
     ports:
       - "1883:1883"
     volumes:
-      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
 
-  influxdb:
-    image: influxdb:2.7
-    container_name: iot-influxdb
+  mysql:
+    image: mysql:8.4
+    container_name: iot-mysql
     restart: unless-stopped
-    ports:
-      - "8086:8086"
-    env_file:
-      - .env
+    command:
+      - --default-authentication-plugin=mysql_native_password
     environment:
-      DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_USERNAME}
-      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_PASSWORD}
-      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ORG}
-      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET}
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_TOKEN}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    ports:
+      - "3306:3306"
     volumes:
-      - influxdb-data:/var/lib/influxdb2
-      - influxdb-config:/etc/influxdb2
+      - mysql-data:/var/lib/mysql
+      - ./mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-u$$MYSQL_USER", "-p$$MYSQL_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
 
-  grafana:
-    image: grafana/grafana:11.1.0
-    container_name: iot-grafana
+  adminer:
+    image: adminer:4
+    container_name: iot-adminer
     restart: unless-stopped
     depends_on:
-      - influxdb
+      - mysql
     ports:
-      - "3000:3000"
-    env_file:
-      - .env
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
-    volumes:
-      - grafana-data:/var/lib/grafana
-      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
-      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - "8080:8080"
 
   bridge:
     build:
@@ -54,36 +47,16 @@ services:
     container_name: iot-bridge
     restart: unless-stopped
     depends_on:
-      - mosquitto
-      - influxdb
+      mysql:
+        condition: service_healthy
+      mosquitto:
+        condition: service_started
     env_file:
       - .env
     environment:
       MQTT_BROKER: tcp://mosquitto:1883
       MQTT_TOPIC: devices/+/telemetry
-      INFLUX_URL: http://influxdb:8086
-      INFLUX_ORG: ${INFLUXDB_ORG}
-      INFLUX_BUCKET: ${INFLUXDB_BUCKET}
-      INFLUX_TOKEN: ${INFLUXDB_TOKEN}
-
-  trend-worker:
-    build:
-      context: ./trend-worker
-    container_name: iot-trend-worker
-    restart: unless-stopped
-    depends_on:
-      - influxdb
-    env_file:
-      - .env
-    environment:
-      INFLUX_URL: http://influxdb:8086
-      INFLUX_ORG: ${INFLUXDB_ORG}
-      INFLUX_BUCKET: ${INFLUXDB_BUCKET}
-      INFLUX_TOKEN: ${INFLUXDB_TOKEN}
-      TREND_RECOMPUTE_INTERVAL: 5m
-      TREND_LOOKBACK: 48h
-      TREND_SUDDEN_DROP_KG: 2.0
-      TREND_SUDDEN_GAIN_KG: 2.0
+      MYSQL_DSN: ${MYSQL_USER}:${MYSQL_PASSWORD}@tcp(mysql:3306)/${MYSQL_DATABASE}?parseTime=true&multiStatements=true
 
   gts-worker:
     build:
@@ -91,19 +64,49 @@ services:
     container_name: iot-gts-worker
     restart: unless-stopped
     depends_on:
-      - influxdb
+      mysql:
+        condition: service_healthy
     env_file:
       - .env
     environment:
-      INFLUX_URL: http://influxdb:8086
-      INFLUX_ORG: ${INFLUXDB_ORG}
-      INFLUX_BUCKET: ${INFLUXDB_BUCKET}
-      INFLUX_TOKEN: ${INFLUXDB_TOKEN}
-      GTS_LOOKBACK: 9600h
-      GTS_RECOMPUTE_INTERVAL: 30m
-      GTS_TIMEZONE: Europe/Berlin
+      MYSQL_DSN: ${MYSQL_USER}:${MYSQL_PASSWORD}@tcp(mysql:3306)/${MYSQL_DATABASE}?parseTime=true&multiStatements=true
+      GTS_INTERVAL: 5m
+      TZ: Europe/Berlin
+
+  trend-worker:
+    build:
+      context: ./trend-worker
+    container_name: iot-trend-worker
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      MYSQL_DSN: ${MYSQL_USER}:${MYSQL_PASSWORD}@tcp(mysql:3306)/${MYSQL_DATABASE}?parseTime=true&multiStatements=true
+      TREND_INTERVAL: 5m
+      TREND_LOOKBACK_HOURS: 48
+      TZ: Europe/Berlin
+
+  grafana:
+    image: grafana/grafana:11.1.4
+    container_name: iot-grafana
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_INSTALL_PLUGINS: ""
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
 
 volumes:
-  influxdb-data:
-  influxdb-config:
-  grafana-data:
+  mysql-data:

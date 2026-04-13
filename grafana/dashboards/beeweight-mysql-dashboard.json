@@ -1,0 +1,155 @@
+{
+  "title": "BeeWeight MySQL Übersicht",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "table",
+      "title": "Alle Beuten - Übersicht",
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql-beeweight"
+      },
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "\nSELECT\n  h.device_id,\n  h.hive_index,\n  COALESCE(h.hive_name, CONCAT('Beute ', h.hive_index)) AS hive_name,\n  d.event_time,\n  d.temperature_c,\n  g.gts_value AS gts_current_year,\n  h.weight_kg,\n  t.delta_day_kg,\n  t.trend_24h_kg,\n  t.trend_48h_kg\nFROM latest_hive_telemetry h\nJOIN latest_device_telemetry d\n  ON d.device_id = h.device_id\nLEFT JOIN latest_gts_daily g\n  ON g.device_id = h.device_id\nLEFT JOIN latest_hive_trend_daily t\n  ON t.device_id = h.device_id\n AND t.hive_index = h.hive_index\nORDER BY h.device_id, h.hive_index\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "temperature_c"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "celsius"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "weight_kg"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "kg"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "delta_day_kg"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "kg"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "trend_24h_kg"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "kg"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "trend_48h_kg"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "kg"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Beutengewicht Verlauf",
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql-beeweight"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "\nSELECT\n  event_time AS time,\n  CONCAT(device_id, ' / ', COALESCE(hive_name, CONCAT('Beute ', hive_index))) AS metric,\n  weight_kg AS value\nFROM hive_telemetry\nWHERE $__timeFilter(event_time)\nORDER BY event_time\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "kg"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "GTS Verlauf",
+      "datasource": {
+        "type": "mysql",
+        "uid": "mysql-beeweight"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 24
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "\nSELECT\n  CAST(gts_date AS DATETIME) AS time,\n  device_id AS metric,\n  gts_value AS value\nFROM gts_daily\nWHERE $__timeFilter(CAST(gts_date AS DATETIME))\nORDER BY gts_date\n"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      }
+    }
+  ]
+}

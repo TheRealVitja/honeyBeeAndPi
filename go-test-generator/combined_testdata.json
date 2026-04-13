@@ -1,0 +1,78 @@
+{
+    "schema": "telemetry.v4",
+    "device_id": "waage-02",
+    "timestamp": "2026-04-12T10:00:00Z",
+    "temperature_c": 18.7,
+    "battery_v": 3.872,
+    "rssi": -69,
+    "sleep_seconds": 300,
+    "firmware_version": "combined-generator-v1",
+    "active_hives": 2,
+    "channels": [
+      {
+        "channel_index": 0,
+        "channel_name": "Kanal 0",
+        "hive_index": 0,
+        "hive_name": "Beute 0",
+        "weight_kg": 27.286,
+        "compensated_weight_kg": 27.299,
+        "ready": true,
+        "stable": true,
+        "drift_detected": false,
+        "calibrated": true
+      },
+      {
+        "channel_index": 1,
+        "channel_name": "Kanal 1",
+        "hive_index": 0,
+        "hive_name": "Beute 0",
+        "weight_kg": 27.268,
+        "compensated_weight_kg": 27.281,
+        "ready": true,
+        "stable": true,
+        "drift_detected": false,
+        "calibrated": true
+      },
+      {
+        "channel_index": 2,
+        "channel_name": "Kanal 2",
+        "hive_index": 1,
+        "hive_name": "Beute 1",
+        "weight_kg": 31.671,
+        "compensated_weight_kg": 31.684,
+        "ready": true,
+        "stable": true,
+        "drift_detected": false,
+        "calibrated": true
+      },
+      {
+        "channel_index": 3,
+        "channel_name": "Kanal 3",
+        "hive_index": 1,
+        "hive_name": "Beute 1",
+        "weight_kg": 31.6,
+        "compensated_weight_kg": 31.613,
+        "ready": true,
+        "stable": true,
+        "drift_detected": false,
+        "calibrated": true
+      }
+    ],
+    "hives": [
+      {
+        "hive_index": 0,
+        "hive_name": "Beute 0",
+        "channel_count": 2,
+        "weight_kg": 54.554,
+        "compensated_weight_kg": 54.58
+      },
+      {
+        "hive_index": 1,
+        "hive_name": "Beute 1",
+        "channel_count": 2,
+        "weight_kg": 63.271,
+        "compensated_weight_kg": 63.297
+      }
+    ]
+  }
+

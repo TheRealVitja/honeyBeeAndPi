@@ -2,54 +2,23 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"database/sql"
 	"log"
-	"math"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
-	"github.com/influxdata/influxdb-client-go/v2/api"
-	"github.com/influxdata/influxdb-client-go/v2/api/query"
-	"github.com/influxdata/influxdb-client-go/v2/api/write"
+	_ "github.com/go-sql-driver/mysql"
 )
 
-type TempSample struct {
-	Time          time.Time
-	DeviceID      string
-	TemperatureC  float64
-	GTSStartYear  *int
-	GTSStartValue *float64
-}
-
-type DailyTemp struct {
-	DeviceID      string
-	Date          time.Time
-	Year          int
-	DayOfYear     int
-	TempAvgC      float64
-	GTSStartYear  *int
-	GTSStartValue *float64
-}
-
-type GTSDaily struct {
-	DeviceID      string
-	Date          time.Time
-	Year          int
-	DayOfYear     int
-	TempAvgC      float64
-	Increment     float64
-	GTSValue      float64
-	GTSStartYear  *int
-	GTSStartValue *float64
-}
-
-type seriesKey struct {
-	DeviceID string
-	DateKey  string
+type TempDay struct {
+	DeviceID    string
+	GTSDate     time.Time
+	MeanTemp    sql.NullFloat64
+	SourceCount int
+	StartYear   sql.NullInt64
+	StartValue  sql.NullFloat64
 }
 
 func getenvDefault(key, fallback string) string {
@@ -60,334 +29,151 @@ func getenvDefault(key, fallback string) string {
 	return v
 }
 
-func mustDurationEnv(key, fallback string) time.Duration {
-	s := getenvDefault(key, fallback)
-	d, err := time.ParseDuration(s)
+func parseDurationEnv(key, fallback string) time.Duration {
+	v := getenvDefault(key, fallback)
+	d, err := time.ParseDuration(v)
 	if err != nil {
-		log.Fatalf("invalid duration %s=%q: %v", key, s, err)
+		log.Fatalf("invalid duration %s=%q: %v", key, v, err)
 	}
 	return d
 }
 
-func parseIntPtr(v any) *int {
-	switch t := v.(type) {
-	case int64:
-		x := int(t)
-		return &x
-	case uint64:
-		x := int(t)
-		return &x
-	case float64:
-		x := int(t)
-		return &x
-	default:
-		return nil
+func mustOpenDB() *sql.DB {
+	dsn := getenvDefault("MYSQL_DSN", "")
+	if dsn == "" {
+		log.Fatal("MYSQL_DSN is required")
 	}
-}
-
-func parseFloatPtr(v any) *float64 {
-	switch t := v.(type) {
-	case float64:
-		x := t
-		return &x
-	case int64:
-		x := float64(t)
-		return &x
-	case uint64:
-		x := float64(t)
-		return &x
-	default:
-		return nil
-	}
-}
-
-func fetchTemperatureSamples(ctx context.Context, queryAPI api.QueryAPI, bucket string, lookback time.Duration) ([]TempSample, error) {
-	flux := fmt.Sprintf(`
-from(bucket: %q)
-  |> range(start: -%ds)
-  |> filter(fn: (r) => r._measurement == "device_telemetry")
-  |> filter(fn: (r) => r._field == "temperature_c" or r._field == "gts_start_year" or r._field == "gts_start_value")
-`, bucket, int(lookback.Seconds()))
-
-	result, err := queryAPI.Query(ctx, flux)
+	db, err := sql.Open("mysql", dsn)
 	if err != nil {
-		return nil, fmt.Errorf("query temperature samples: %w", err)
+		log.Fatalf("open mysql: %v", err)
 	}
-
-	type builder struct {
-		time          time.Time
-		deviceID      string
-		temp          *float64
-		gtsStartYear  *int
-		gtsStartValue *float64
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(10)
+	db.SetConnMaxLifetime(30 * time.Minute)
+	if err := db.Ping(); err != nil {
+		log.Fatalf("ping mysql: %v", err)
 	}
-	builders := map[string]*builder{}
-
-	for result.Next() {
-		rec := result.Record()
-		deviceID, _ := rec.ValueByKey("device_id").(string)
-		if deviceID == "" {
-			continue
-		}
-		ts := rec.Time().UTC()
-		key := deviceID + "|" + ts.Format(time.RFC3339Nano)
-
-		b, ok := builders[key]
-		if !ok {
-			b = &builder{time: ts, deviceID: deviceID}
-			builders[key] = b
-		}
-
-		switch rec.Field() {
-		case "temperature_c":
-			if v, ok := rec.Value().(float64); ok {
-				b.temp = &v
-			}
-		case "gts_start_year":
-			b.gtsStartYear = parseIntPtr(rec.Value())
-		case "gts_start_value":
-			b.gtsStartValue = parseFloatPtr(rec.Value())
-		}
-	}
-
-	if result.Err() != nil {
-		return nil, fmt.Errorf("result iteration: %w", result.Err())
-	}
-
-	out := make([]TempSample, 0, len(builders))
-	for _, b := range builders {
-		if b.temp == nil {
-			continue
-		}
-		out = append(out, TempSample{
-			Time:          b.time,
-			DeviceID:      b.deviceID,
-			TemperatureC:  *b.temp,
-			GTSStartYear:  b.gtsStartYear,
-			GTSStartValue: b.gtsStartValue,
-		})
-	}
-
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].DeviceID == out[j].DeviceID {
-			return out[i].Time.Before(out[j].Time)
-		}
-		return out[i].DeviceID < out[j].DeviceID
-	})
-
-	return out, nil
+	return db
 }
 
-func aggregateDaily(samples []TempSample, tz *time.Location) []DailyTemp {
-	type agg struct {
-		deviceID      string
-		date          time.Time
-		year          int
-		dayOfYear     int
-		sum           float64
-		count         int
-		gtsStartYear  *int
-		gtsStartValue *float64
-		lastSeen      time.Time
+func upsertGTS(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, `
+		SELECT
+			d.device_id,
+			DATE(CONVERT_TZ(d.event_time, '+00:00', '+00:00')) AS gts_date,
+			AVG(d.temperature_c) AS mean_temp,
+			COUNT(*) AS source_count,
+			MAX(d.gts_start_year) AS start_year,
+			MAX(d.gts_start_value) AS start_value
+		FROM device_telemetry d
+		WHERE d.event_time IS NOT NULL
+		  AND d.temperature_c IS NOT NULL
+		GROUP BY d.device_id, DATE(CONVERT_TZ(d.event_time, '+00:00', '+00:00'))
+		ORDER BY d.device_id, gts_date`)
+	if err != nil {
+		return err
 	}
+	defer rows.Close()
 
-	grouped := map[seriesKey]*agg{}
-
-	for _, s := range samples {
-		local := s.Time.In(tz)
-		dayStart := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, tz)
-		key := seriesKey{
-			DeviceID: s.DeviceID,
-			DateKey:  dayStart.Format("2006-01-02"),
-		}
-
-		a, ok := grouped[key]
-		if !ok {
-			a = &agg{
-				deviceID:  s.DeviceID,
-				date:      dayStart,
-				year:      dayStart.Year(),
-				dayOfYear: dayStart.YearDay(),
-			}
-			grouped[key] = a
-		}
-
-		a.sum += s.TemperatureC
-		a.count++
-
-		// latest explicit start config of the day wins
-		if s.Time.After(a.lastSeen) {
-			a.lastSeen = s.Time
-			if s.GTSStartYear != nil && s.GTSStartValue != nil {
-				a.gtsStartYear = s.GTSStartYear
-				a.gtsStartValue = s.GTSStartValue
-			}
-		}
+	type item struct {
+		DeviceID    string
+		GTSDate     time.Time
+		MeanTemp    float64
+		SourceCount int
+		StartYear   sql.NullInt64
+		StartValue  sql.NullFloat64
 	}
-
-	out := make([]DailyTemp, 0, len(grouped))
-	for _, a := range grouped {
-		if a.count == 0 {
-			continue
+	var items []item
+	for rows.Next() {
+		var d TempDay
+		if err := rows.Scan(&d.DeviceID, &d.GTSDate, &d.MeanTemp, &d.SourceCount, &d.StartYear, &d.StartValue); err != nil {
+			return err
 		}
-		out = append(out, DailyTemp{
-			DeviceID:      a.deviceID,
-			Date:          a.date,
-			Year:          a.year,
-			DayOfYear:     a.dayOfYear,
-			TempAvgC:      a.sum / float64(a.count),
-			GTSStartYear:  a.gtsStartYear,
-			GTSStartValue: a.gtsStartValue,
+		mean := 0.0
+		if d.MeanTemp.Valid {
+			mean = d.MeanTemp.Float64
+		}
+		items = append(items, item{
+			DeviceID: d.DeviceID, GTSDate: d.GTSDate, MeanTemp: mean, SourceCount: d.SourceCount,
+			StartYear: d.StartYear, StartValue: d.StartValue,
 		})
 	}
-
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].DeviceID == out[j].DeviceID {
-			return out[i].Date.Before(out[j].Date)
-		}
-		return out[i].DeviceID < out[j].DeviceID
-	})
-
-	return out
-}
-
-func computeGTS(dailies []DailyTemp) []GTSDaily {
-	byDeviceYear := map[string][]DailyTemp{}
-	for _, d := range dailies {
-		key := fmt.Sprintf("%s|%d", d.DeviceID, d.Year)
-		byDeviceYear[key] = append(byDeviceYear[key], d)
+	if err := rows.Err(); err != nil {
+		return err
 	}
 
-	out := make([]GTSDaily, 0, len(dailies))
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			_ = tx.Rollback()
+		}
+	}()
 
-	for _, days := range byDeviceYear {
-		sort.Slice(days, func(i, j int) bool { return days[i].Date.Before(days[j].Date) })
+	lastValueByDeviceYear := map[string]float64{}
+	startOverrideByDeviceYear := map[string]float64{}
 
-		var currentGTS float64
-		for idx, day := range days {
-			increment := math.Max(day.TempAvgC, 0)
+	for _, it := range items {
+		year := it.GTSDate.Year()
+		key := it.DeviceID + "|" + strconv.Itoa(year)
 
-			if idx == 0 {
-				startValue := 0.0
-				if day.GTSStartYear != nil && day.GTSStartValue != nil && *day.GTSStartYear == day.Year {
-					startValue = *day.GTSStartValue
-				}
-				currentGTS = startValue + increment
+		if it.StartYear.Valid && int(it.StartYear.Int64) == year && it.StartValue.Valid {
+			startOverrideByDeviceYear[key] = it.StartValue.Float64
+		}
+
+		prev, ok := lastValueByDeviceYear[key]
+		if !ok {
+			if v, has := startOverrideByDeviceYear[key]; has {
+				prev = v
 			} else {
-				currentGTS += increment
+				prev = 0
 			}
-
-			out = append(out, GTSDaily{
-				DeviceID:      day.DeviceID,
-				Date:          day.Date,
-				Year:          day.Year,
-				DayOfYear:     day.DayOfYear,
-				TempAvgC:      day.TempAvgC,
-				Increment:     increment,
-				GTSValue:      currentGTS,
-				GTSStartYear:  day.GTSStartYear,
-				GTSStartValue: day.GTSStartValue,
-			})
-		}
-	}
-
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].DeviceID == out[j].DeviceID {
-			return out[i].Date.Before(out[j].Date)
-		}
-		return out[i].DeviceID < out[j].DeviceID
-	})
-
-	return out
-}
-
-func writeGTSDaily(ctx context.Context, writeAPI api.WriteAPIBlocking, rows []GTSDaily) error {
-	for _, row := range rows {
-		fields := map[string]interface{}{
-			"day_of_year":   row.DayOfYear,
-			"temp_avg_c":    row.TempAvgC,
-			"gts_increment": row.Increment,
-			"gts_value":     row.GTSValue,
-		}
-		if row.GTSStartYear != nil {
-			fields["gts_start_year"] = *row.GTSStartYear
-		}
-		if row.GTSStartValue != nil {
-			fields["gts_start_value"] = *row.GTSStartValue
 		}
 
-		point := write.NewPoint(
-			"gts_daily",
-			map[string]string{
-				"device_id": row.DeviceID,
-				"year":      strconv.Itoa(row.Year),
-			},
-			fields,
-			row.Date.UTC(),
+		contribution := it.MeanTemp
+		if contribution < 0 {
+			contribution = 0
+		}
+		gtsValue := prev + contribution
+		lastValueByDeviceYear[key] = gtsValue
+
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO gts_daily (
+				device_id, gts_year, gts_date, mean_temperature_c, contribution_c, gts_value, source_count
+			) VALUES (?, ?, ?, ?, ?, ?, ?)
+			ON DUPLICATE KEY UPDATE
+				mean_temperature_c = VALUES(mean_temperature_c),
+				contribution_c = VALUES(contribution_c),
+				gts_value = VALUES(gts_value),
+				source_count = VALUES(source_count)`,
+			it.DeviceID, year, it.GTSDate.Format("2006-01-02"), it.MeanTemp, contribution, gtsValue, it.SourceCount,
 		)
-
-		if err := writeAPI.WritePoint(ctx, point); err != nil {
-			return fmt.Errorf("write gts daily %s %s: %w", row.DeviceID, row.Date.Format("2006-01-02"), err)
+		if err != nil {
+			return err
 		}
 	}
-	return nil
-}
 
-func recomputeGTS(ctx context.Context, queryAPI api.QueryAPI, writeAPI api.WriteAPIBlocking, bucket string, lookback time.Duration, tz *time.Location) error {
-	samples, err := fetchTemperatureSamples(ctx, queryAPI, bucket, lookback)
-	if err != nil {
-		return err
-	}
-	dailies := aggregateDaily(samples, tz)
-	rows := computeGTS(dailies)
-	if err := writeGTSDaily(ctx, writeAPI, rows); err != nil {
-		return err
-	}
-	log.Printf("gts recompute complete: %d daily rows written", len(rows))
-	return nil
+	return tx.Commit()
 }
 
 func main() {
-	influxURL := getenvDefault("INFLUX_URL", "http://localhost:8086")
-	influxToken := strings.TrimSpace(os.Getenv("INFLUX_TOKEN"))
-	influxOrg := getenvDefault("INFLUX_ORG", "myorg")
-	influxBucket := getenvDefault("INFLUX_BUCKET", "telemetry")
-	lookback := mustDurationEnv("GTS_LOOKBACK", "9600h") // 400 days
-	recomputeInterval := mustDurationEnv("GTS_RECOMPUTE_INTERVAL", "30m")
-	tzName := getenvDefault("GTS_TIMEZONE", "Europe/Berlin")
+	db := mustOpenDB()
+	defer db.Close()
 
-	if influxToken == "" {
-		log.Fatal("missing INFLUX_TOKEN")
-	}
+	interval := parseDurationEnv("GTS_INTERVAL", "5m")
+	log.Printf("gts-worker started interval=%s", interval)
 
-	tz, err := time.LoadLocation(tzName)
-	if err != nil {
-		log.Fatalf("invalid GTS_TIMEZONE=%q: %v", tzName, err)
-	}
-
-	client := influxdb2.NewClient(influxURL, influxToken)
-	defer client.Close()
-
-	queryAPI := client.QueryAPI(influxOrg)
-	writeAPI := client.WriteAPIBlocking(influxOrg, influxBucket)
-
-	ctx := context.Background()
-
-	log.Printf("starting GTS worker: influx=%s org=%s bucket=%s lookback=%s interval=%s timezone=%s", influxURL, influxOrg, influxBucket, lookback, recomputeInterval, tzName)
-
-	if err := recomputeGTS(ctx, queryAPI, writeAPI, influxBucket, lookback, tz); err != nil {
-		log.Printf("initial GTS recompute failed: %v", err)
-	}
-
-	ticker := time.NewTicker(recomputeInterval)
-	defer ticker.Stop()
-
-	for range ticker.C {
-		if err := recomputeGTS(ctx, queryAPI, writeAPI, influxBucket, lookback, tz); err != nil {
-			log.Printf("GTS recompute failed: %v", err)
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+		err := upsertGTS(ctx, db)
+		cancel()
+		if err != nil {
+			log.Printf("gts upsert failed: %v", err)
+		} else {
+			log.Printf("gts upsert finished")
 		}
+		time.Sleep(interval)
 	}
 }
-
-// Keep package import referenced for some toolchains.
-var _ *query.FluxRecord
