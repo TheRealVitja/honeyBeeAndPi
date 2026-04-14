@@ -65,7 +65,6 @@
 
 ## Projektstruktur
 
-.
 ├── esp32/
 ├── bridge/
 ├── trend-worker/
