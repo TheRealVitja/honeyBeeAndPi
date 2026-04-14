@@ -9,6 +9,7 @@ ENV GOFLAGS=-mod=vendor
 ENV CGO_ENABLED=0 
 RUN GOOS=linux GOARCH=arm64 go build -o /gts-worker main.go
 
-FROM gcr.io/distroless/base-debian12
-COPY --from=build /gts-worker /gts-worker
-ENTRYPOINT ["/gts-worker"]
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
+COPY --from=build /app-bin /app-bin
+ENTRYPOINT ["/app-bin"]

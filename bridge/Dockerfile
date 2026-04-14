@@ -7,8 +7,9 @@ COPY vendor ./vendor
 COPY main.go ./
 ENV GOFLAGS=-mod=vendor
 ENV CGO_ENABLED=0 
-RUN GOOS=linux GOARCH=arm64 go build -o /bridge main.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /app-bin main.go
 
-FROM gcr.io/distroless/base-debian12
-COPY --from=build /bridge /bridge
-ENTRYPOINT ["/bridge"]
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
+COPY --from=build /app-bin /app-bin
+ENTRYPOINT ["/app-bin"]

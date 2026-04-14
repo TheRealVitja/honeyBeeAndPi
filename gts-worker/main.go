@@ -38,6 +38,24 @@ func parseDurationEnv(key, fallback string) time.Duration {
 	return d
 }
 
+func monthlyFactor(d time.Time) float64 {
+	switch d.Month() {
+	case time.January:
+		return 0.5
+	case time.February:
+		return 0.75
+	default:
+		return 1.0
+	}
+}
+
+func gtsContribution(meanTemp float64, d time.Time) float64 {
+	if meanTemp <= 0 {
+		return 0
+	}
+	return meanTemp * monthlyFactor(d)
+}
+
 func mustOpenDB() *sql.DB {
 	dsn := getenvDefault("MYSQL_DSN", "")
 	if dsn == "" {
@@ -132,12 +150,8 @@ func upsertGTS(ctx context.Context, db *sql.DB) error {
 			}
 		}
 
-		contribution := it.MeanTemp
-		if contribution < 0 {
-			contribution = 0
-		}
+		contribution := gtsContribution(it.MeanTemp, it.GTSDate)
 		gtsValue := prev + contribution
-		lastValueByDeviceYear[key] = gtsValue
 
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO gts_daily (
