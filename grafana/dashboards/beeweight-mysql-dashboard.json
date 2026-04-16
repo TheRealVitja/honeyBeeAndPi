@@ -141,7 +141,7 @@
         {
           "refId": "A",
           "format": "time_series",
-          "rawSql": "\nSELECT\n  CAST(gts_date AS DATETIME) AS time,\n  device_id AS metric,\n  gts_value AS value\nFROM gts_daily\nWHERE $__timeFilter(CAST(gts_date AS DATETIME))\nORDER BY gts_date\n"
+          "rawSql": "\nSELECT\n  CAST(gts_date AS DATETIME) AS time,\n  device_id AS metric,\n  gts_value AS value\nFROM gts_daily\nWHERE $__timeFilter(gts_date AS DATETIME)\nORDER BY gts_date\n"
         }
       ],
       "fieldConfig": {
