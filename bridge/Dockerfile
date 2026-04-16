@@ -10,6 +10,6 @@ ENV CGO_ENABLED=0
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /app-bin main.go
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
+#RUN apt-get update && apt-get install -y ca-certificates tzdata && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app-bin /app-bin
 ENTRYPOINT ["/app-bin"]
