@@ -16,7 +16,7 @@ static const int MAX_HIVES = 3;
 static const int MAX_CAL_POINTS = 5;
 
 static const byte DNS_PORT = 53;
-static const char* AP_SSID = "Waagen-Setup";
+static const char* AP_SSID = "BeeLife";
 static const char* AP_PASS = "setup";
 static const unsigned long CONFIG_TIMEOUT_MS = 10UL * 60UL * 1000UL;
 static const unsigned long WIFI_CONNECT_TIMEOUT_MS = 20000UL;
@@ -269,9 +269,7 @@ bool connectWiFiWithCredentials(const String& ssid, const String& password, unsi
   return WiFi.status() == WL_CONNECTED;
 }
 
-bool connectWiFi() {
-  return connectWiFiWithCredentials(cfg.wifiSSID, cfg.wifiPassword, WIFI_CONNECT_TIMEOUT_MS);
-}
+bool connectWiFi() { return connectWiFiWithCredentials(cfg.wifiSSID, cfg.wifiPassword, WIFI_CONNECT_TIMEOUT_MS); }
 
 bool mqttConnectWithCredentials(PubSubClient& client, const String& host, uint16_t port,
                                 const String& user, const String& password,
@@ -280,7 +278,7 @@ bool mqttConnectWithCredentials(PubSubClient& client, const String& host, uint16
   client.setServer(host.c_str(), port);
   client.setKeepAlive(MQTT_KEEPALIVE_SECONDS);
   client.setSocketTimeout(MQTT_SOCKET_TIMEOUT_SECONDS);
-  client.setBufferSize(2048);
+  client.setBufferSize(4096);
 
   unsigned long start = millis();
   while (!client.connected() && millis() - start < timeoutMs) {
@@ -294,9 +292,7 @@ bool mqttConnectWithCredentials(PubSubClient& client, const String& host, uint16
   return client.connected();
 }
 
-bool connectMQTT() {
-  return mqttConnectWithCredentials(mqttClient, cfg.mqttHost, cfg.mqttPort, cfg.mqttUser, cfg.mqttPassword, cfg.deviceID + "-pub", MQTT_CONNECT_TIMEOUT_MS);
-}
+bool connectMQTT() { return mqttConnectWithCredentials(mqttClient, cfg.mqttHost, cfg.mqttPort, cfg.mqttUser, cfg.mqttPassword, cfg.deviceID + "-pub", MQTT_CONNECT_TIMEOUT_MS); }
 
 String testMQTTConnection(const String& wifiSSID, const String& wifiPass,
                           const String& mqttHost, uint16_t mqttPort,
@@ -351,10 +347,7 @@ String testMQTTConnection(const String& wifiSSID, const String& wifiPass,
   WiFi.disconnect(true, true);
   delay(100);
 
-  if (!published) {
-    return "MQTT verbunden, Test-Publish fehlgeschlagen";
-  }
-
+  if (!published) return "MQTT verbunden, Test-Publish fehlgeschlagen";
   DBG("Test MQTT success");
   return "";
 }
@@ -397,17 +390,12 @@ bool recomputeCalibrationModel(int idx, String& errorMsg) {
     errorMsg = "Mindestens 2 Kalibrierpunkte noetig";
     return false;
   }
-
   float sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
   for (int i = 0; i < chCal[idx].count; i++) {
     float x = chCal[idx].points[i].raw;
     float y = chCal[idx].points[i].kg;
-    sumX += x;
-    sumY += y;
-    sumXY += x * y;
-    sumXX += x * x;
+    sumX += x; sumY += y; sumXY += x * y; sumXX += x * x;
   }
-
   float n = (float)chCal[idx].count;
   float denom = n * sumXX - sumX * sumX;
   if (fabs(denom) < 0.0001f) {
@@ -415,7 +403,6 @@ bool recomputeCalibrationModel(int idx, String& errorMsg) {
     errorMsg = "Kalibriermodell nicht berechenbar";
     return false;
   }
-
   chCal[idx].scale = (n * sumXY - sumX * sumY) / denom;
   chCal[idx].offset = (sumY - chCal[idx].scale * sumX) / n;
   chCal[idx].validModel = true;
@@ -426,9 +413,7 @@ bool recomputeCalibrationModel(int idx, String& errorMsg) {
 
 void removeCalibrationPoint(int idx, int pointIdx) {
   if (pointIdx < 0 || pointIdx >= chCal[idx].count) return;
-  for (int i = pointIdx; i < chCal[idx].count - 1; i++) {
-    chCal[idx].points[i] = chCal[idx].points[i + 1];
-  }
+  for (int i = pointIdx; i < chCal[idx].count - 1; i++) chCal[idx].points[i] = chCal[idx].points[i + 1];
   chCal[idx].count--;
   String err;
   recomputeCalibrationModel(idx, err);
@@ -442,8 +427,7 @@ void clearCalibration(int idx) {
 
 float readBatteryVoltage() {
   int raw = analogRead(BATTERY_ADC_PIN);
-  float v = ((float)raw / (float)ADC_MAX) * ADC_REFERENCE_VOLT * BATTERY_DIVIDER_MULTIPLIER;
-  return v;
+  return ((float)raw / (float)ADC_MAX) * ADC_REFERENCE_VOLT * BATTERY_DIVIDER_MULTIPLIER;
 }
 
 float readTemperatureC() {
@@ -472,11 +456,8 @@ ChannelReading readChannel(int idx, float temperatureC) {
   int got = 0;
   unsigned long start = millis();
   while (got < SAMPLES && millis() - start < 4000) {
-    if (hx[idx].is_ready()) {
-      vals[got++] = (float)hx[idx].read();
-    } else {
-      delay(5);
-    }
+    if (hx[idx].is_ready()) vals[got++] = (float)hx[idx].read();
+    else delay(5);
   }
   if (got < 2) return r;
 
@@ -499,18 +480,14 @@ ChannelReading readChannel(int idx, float temperatureC) {
   if (chCal[idx].validModel) {
     r.weightKg = chCal[idx].scale * r.rawAvg + chCal[idx].offset;
     r.compensatedWeightKg = r.weightKg;
-    if (!isnan(temperatureC)) {
-      r.compensatedWeightKg -= ((temperatureC - 20.0f) * chCal[idx].tempCompKgPerC);
-    }
+    if (!isnan(temperatureC)) r.compensatedWeightKg -= ((temperatureC - 20.0f) * chCal[idx].tempCompKgPerC);
   }
   return r;
 }
 
 String formatTimestampISO8601() {
   struct tm timeinfo;
-  if (!getLocalTime(&timeinfo, 1000)) {
-    return "";
-  }
+  if (!getLocalTime(&timeinfo, 1000)) return "";
   char buf[32];
   strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &timeinfo);
   return String(buf);
@@ -593,12 +570,8 @@ void configureOTA() {
   ArduinoOTA.setHostname(cfg.deviceID.c_str());
   ArduinoOTA.onStart([]() { DBG("OTA start"); });
   ArduinoOTA.onEnd([]() { DBG("OTA end"); });
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-    (void)progress; (void)total;
-  });
-  ArduinoOTA.onError([](ota_error_t error) {
-    DBG("OTA error=%d", (int)error);
-  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) { (void)progress; (void)total; });
+  ArduinoOTA.onError([](ota_error_t error) { DBG("OTA error=%d", (int)error); });
   ArduinoOTA.begin();
   otaStartedAt = millis();
   otaActive = true;
@@ -606,15 +579,6 @@ void configureOTA() {
 
 void enterDeepSleep() {
   DBG("enterDeepSleep sleepSeconds=%lu", cfg.sleepSeconds);
-  if (mqttClient.connected()) {
-    DBG("MQTT disconnect before sleep");
-    mqttClient.loop();
-    mqttClient.disconnect();
-    delay(100);
-  }
-  DBG("WiFi disconnect before sleep");
-  WiFi.disconnect(true, true);
-  delay(100);
   esp_sleep_enable_timer_wakeup((uint64_t)cfg.sleepSeconds * 1000000ULL);
   DBG("Deep sleep start now");
   Serial.flush();
@@ -853,9 +817,7 @@ void handleScan() {
   String html = htmlHeader("WLAN Scan");
   int n = WiFi.scanNetworks();
   html += "<ul>";
-  for (int i = 0; i < n; i++) {
-    html += "<li>" + WiFi.SSID(i) + " (" + String(WiFi.RSSI(i)) + " dBm)</li>";
-  }
+  for (int i = 0; i < n; i++) html += "<li>" + WiFi.SSID(i) + " (" + String(WiFi.RSSI(i)) + " dBm)</li>";
   html += "</ul><a href='/'>Zurueck</a></body></html>";
   server.send(200, "text/html", html);
 }
@@ -925,9 +887,13 @@ void setup() {
   analogReadResolution(12);
   ds18b20.begin();
 
+  pinMode(0, INPUT_PULLUP);
+  delay(50);
+  bool bootPressed = (digitalRead(0) == LOW);
+
   setDefaultConfig();
   bool haveConfig = loadConfig();
-  
+
   DBG("CFG haveConfig=%d", haveConfig ? 1 : 0);
   DBG("CFG deviceID=%s", cfg.deviceID.c_str());
   DBG("CFG wifiSSID=%s", cfg.wifiSSID.c_str());
@@ -937,14 +903,21 @@ void setup() {
   DBG("CFG otaWindowMs=%lu", cfg.otaWindowMs);
   DBG("CFG activeChannels=%d activeHives=%d", cfg.activeChannels, cfg.activeHives);
 
+  setupScales();
+  DBG("Scales initialized before portal decision");
+
+  if (bootPressed) {
+    DBG("BOOT button pressed -> force config portal");
+    startConfigPortal();
+    return;
+  }
+
   if (!haveConfig) {
     DBG("RETURN PATH: no config");
     startConfigPortal();
     return;
   }
 
-
-  // Retry-Logik für WLAN
   const int WIFI_RETRY_MAX = 3;
   int wifiRetry = 0;
   bool wifiOk = false;
@@ -964,7 +937,6 @@ void setup() {
   DBG("STEP 1: WiFi connected");
 
   setupTimeIfPossible();
-  setupScales();
   DBG("STEP 2: scales setup");
 
   float temperatureC = readTemperatureC();
@@ -984,8 +956,6 @@ void setup() {
         readings[i].compensatedWeightKg);
   }
 
-
-  // Retry-Logik für MQTT
   const int MQTT_RETRY_MAX = 3;
   int mqttRetry = 0;
   bool mqttOk = false;
@@ -1003,23 +973,16 @@ void setup() {
     return;
   }
   DBG("STEP 4: MQTT connected");
-  
-   bool bootPressed = (digitalRead(0) == LOW);
-  
-  if (bootPressed) {
-    DBG("BOOT button pressed -> force config portal");
-    startConfigPortal();
-    return;
-  }
-
 
   String topic = deriveTopicFromDeviceID(cfg.deviceID);
   String payload = buildTelemetryPayload(temperatureC, batteryV, rssi, readings);
   DBG("STEP 5: payload bytes=%u topic=%s", payload.length(), topic.c_str());
 
   bool published = mqttClient.publish(topic.c_str(), payload.c_str(), true);
-  mqttClient.loop();
-  delay(200);
+  for (int i = 0; i < 25; i++) {
+    mqttClient.loop();
+    delay(20);
+  }
 
   if (!published) {
     DBG("RETURN PATH: publish failed state=%d", mqttClient.state());
@@ -1045,11 +1008,23 @@ void setup() {
 
   DBG("STEP 9: disconnect before sleep");
   if (mqttClient.connected()) {
+    DBG("MQTT flush before disconnect");
+    for (int i = 0; i < 20; i++) {
+      mqttClient.loop();
+      delay(20);
+    }
+    DBG("MQTT disconnect");
     mqttClient.disconnect();
-    delay(100);
+    delay(500);
   }
+
+  DBG("WiFi disconnect");
   WiFi.disconnect(true, true);
-  delay(100);
+  delay(500);
+
+  DBG("WiFi off");
+  WiFi.mode(WIFI_OFF);
+  delay(200);
 
   DBG("STEP 10: entering deep sleep");
   enterDeepSleep();

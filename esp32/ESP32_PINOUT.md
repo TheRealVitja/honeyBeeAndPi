@@ -21,22 +21,15 @@ Mehrere Kanäle werden parallel betrieben. Jeder Kanal benötigt:
 
 | Kanal | DOUT | SCK |
 |------|------|-----|
-| 0 | GPIO16 | GPIO17 |
-| 1 | GPIO18 | GPIO19 |
-| 2 | GPIO21 | GPIO22 |
-| 3 | GPIO23 | GPIO25 |
-| 4 | GPIO26 | GPIO13 |
-| 5 | GPIO27 | GPIO14 |
-| 6 | GPIO32 | GPIO12 |
-| 7 | GPIO33 | GPIO15 |
+| 0 | GPIO16 | GPIO17 | hx711 kanal 0
+| 1 | GPIO18 | GPIO19 | hx711 kanal 1
+| 2 | GPIO21 | GPIO22 | hx711 kanal 2
+| 3 | GPIO23 | GPIO25 | hx711 kanal 3
+| 4 | GPIO26 | GPIO13 | hx711 kanal 4
+| 5 | GPIO27 | GPIO14 | hx711 kanal 5
 
-### Hinweise
 
-- GPIO34–39 sind **nur Input** → nicht für SCK verwenden
-- GPIO12 kann Boot-Probleme verursachen (Pullups beachten)
-- GPIO15 beeinflusst Boot-Modus → vorsichtig verwenden
 
----
 
 ## DS18B20 (Temperatur)
 
