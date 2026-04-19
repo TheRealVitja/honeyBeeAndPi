@@ -27,6 +27,7 @@ static const unsigned long MIN_SLEEP_SECONDS = 10UL;
 
 static const uint16_t MQTT_KEEPALIVE_SECONDS = 60;
 static const uint16_t MQTT_SOCKET_TIMEOUT_SECONDS = 10;
+static const uint16_t MQTT_BUFFER_SIZE = 4096;
 
 static const char* NTP_SERVER_1 = "pool.ntp.org";
 static const char* NTP_SERVER_2 = "time.google.com";
@@ -209,6 +210,12 @@ void resetConfig() {
   setDefaultConfig();
 }
 
+float parseLocalizedFloat(String s) {
+  s.trim();
+  s.replace(",", ".");
+  return s.toFloat();
+}
+
 bool loadConfig() {
   prefs.begin("beeweight", false);
 
@@ -252,8 +259,13 @@ bool loadConfig() {
       chCal[i].points[j].raw = prefs.getFloat((cp + "raw" + String(j)).c_str(), 0.0f);
       chCal[i].points[j].kg = prefs.getFloat((cp + "kg" + String(j)).c_str(), 0.0f);
     }
+    String err;
+    if (chCal[i].count >= 2) {
+      recomputeCalibrationModel(i, err);
+    } else {
+      chCal[i].validModel = false;
+    }
   }
-
   return cfg.wifiSSID.length() > 0 && cfg.mqttHost.length() > 0 && cfg.deviceID.length() > 0;
 }
 
@@ -269,7 +281,9 @@ bool connectWiFiWithCredentials(const String& ssid, const String& password, unsi
   return WiFi.status() == WL_CONNECTED;
 }
 
-bool connectWiFi() { return connectWiFiWithCredentials(cfg.wifiSSID, cfg.wifiPassword, WIFI_CONNECT_TIMEOUT_MS); }
+bool connectWiFi() {
+  return connectWiFiWithCredentials(cfg.wifiSSID, cfg.wifiPassword, WIFI_CONNECT_TIMEOUT_MS);
+}
 
 bool mqttConnectWithCredentials(PubSubClient& client, const String& host, uint16_t port,
                                 const String& user, const String& password,
@@ -278,7 +292,7 @@ bool mqttConnectWithCredentials(PubSubClient& client, const String& host, uint16
   client.setServer(host.c_str(), port);
   client.setKeepAlive(MQTT_KEEPALIVE_SECONDS);
   client.setSocketTimeout(MQTT_SOCKET_TIMEOUT_SECONDS);
-  client.setBufferSize(4096);
+  client.setBufferSize(MQTT_BUFFER_SIZE);
 
   unsigned long start = millis();
   while (!client.connected() && millis() - start < timeoutMs) {
@@ -292,7 +306,9 @@ bool mqttConnectWithCredentials(PubSubClient& client, const String& host, uint16
   return client.connected();
 }
 
-bool connectMQTT() { return mqttConnectWithCredentials(mqttClient, cfg.mqttHost, cfg.mqttPort, cfg.mqttUser, cfg.mqttPassword, cfg.deviceID + "-pub", MQTT_CONNECT_TIMEOUT_MS); }
+bool connectMQTT() {
+  return mqttConnectWithCredentials(mqttClient, cfg.mqttHost, cfg.mqttPort, cfg.mqttUser, cfg.mqttPassword, cfg.deviceID + "-pub", MQTT_CONNECT_TIMEOUT_MS);
+}
 
 String testMQTTConnection(const String& wifiSSID, const String& wifiPass,
                           const String& mqttHost, uint16_t mqttPort,
@@ -312,7 +328,7 @@ String testMQTTConnection(const String& wifiSSID, const String& wifiPass,
   testClient.setServer(mqttHost.c_str(), mqttPort);
   testClient.setKeepAlive(MQTT_KEEPALIVE_SECONDS);
   testClient.setSocketTimeout(MQTT_SOCKET_TIMEOUT_SECONDS);
-  testClient.setBufferSize(2048);
+  testClient.setBufferSize(MQTT_BUFFER_SIZE);
 
   unsigned long start = millis();
   while (!testClient.connected() && millis() - start < MQTT_CONNECT_TIMEOUT_MS) {
@@ -347,7 +363,10 @@ String testMQTTConnection(const String& wifiSSID, const String& wifiPass,
   WiFi.disconnect(true, true);
   delay(100);
 
-  if (!published) return "MQTT verbunden, Test-Publish fehlgeschlagen";
+  if (!published) {
+    return "MQTT verbunden, Test-Publish fehlgeschlagen";
+  }
+
   DBG("Test MQTT success");
   return "";
 }
@@ -390,12 +409,17 @@ bool recomputeCalibrationModel(int idx, String& errorMsg) {
     errorMsg = "Mindestens 2 Kalibrierpunkte noetig";
     return false;
   }
+
   float sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
   for (int i = 0; i < chCal[idx].count; i++) {
     float x = chCal[idx].points[i].raw;
     float y = chCal[idx].points[i].kg;
-    sumX += x; sumY += y; sumXY += x * y; sumXX += x * x;
+    sumX += x;
+    sumY += y;
+    sumXY += x * y;
+    sumXX += x * x;
   }
+
   float n = (float)chCal[idx].count;
   float denom = n * sumXX - sumX * sumX;
   if (fabs(denom) < 0.0001f) {
@@ -403,6 +427,7 @@ bool recomputeCalibrationModel(int idx, String& errorMsg) {
     errorMsg = "Kalibriermodell nicht berechenbar";
     return false;
   }
+
   chCal[idx].scale = (n * sumXY - sumX * sumY) / denom;
   chCal[idx].offset = (sumY - chCal[idx].scale * sumX) / n;
   chCal[idx].validModel = true;
@@ -413,7 +438,9 @@ bool recomputeCalibrationModel(int idx, String& errorMsg) {
 
 void removeCalibrationPoint(int idx, int pointIdx) {
   if (pointIdx < 0 || pointIdx >= chCal[idx].count) return;
-  for (int i = pointIdx; i < chCal[idx].count - 1; i++) chCal[idx].points[i] = chCal[idx].points[i + 1];
+  for (int i = pointIdx; i < chCal[idx].count - 1; i++) {
+    chCal[idx].points[i] = chCal[idx].points[i + 1];
+  }
   chCal[idx].count--;
   String err;
   recomputeCalibrationModel(idx, err);
@@ -427,7 +454,8 @@ void clearCalibration(int idx) {
 
 float readBatteryVoltage() {
   int raw = analogRead(BATTERY_ADC_PIN);
-  return ((float)raw / (float)ADC_MAX) * ADC_REFERENCE_VOLT * BATTERY_DIVIDER_MULTIPLIER;
+  float v = ((float)raw / (float)ADC_MAX) * ADC_REFERENCE_VOLT * BATTERY_DIVIDER_MULTIPLIER;
+  return v;
 }
 
 float readTemperatureC() {
@@ -456,8 +484,11 @@ ChannelReading readChannel(int idx, float temperatureC) {
   int got = 0;
   unsigned long start = millis();
   while (got < SAMPLES && millis() - start < 4000) {
-    if (hx[idx].is_ready()) vals[got++] = (float)hx[idx].read();
-    else delay(5);
+    if (hx[idx].is_ready()) {
+      vals[got++] = (float)hx[idx].read();
+    } else {
+      delay(5);
+    }
   }
   if (got < 2) return r;
 
@@ -480,14 +511,18 @@ ChannelReading readChannel(int idx, float temperatureC) {
   if (chCal[idx].validModel) {
     r.weightKg = chCal[idx].scale * r.rawAvg + chCal[idx].offset;
     r.compensatedWeightKg = r.weightKg;
-    if (!isnan(temperatureC)) r.compensatedWeightKg -= ((temperatureC - 20.0f) * chCal[idx].tempCompKgPerC);
+    if (!isnan(temperatureC)) {
+      r.compensatedWeightKg -= ((temperatureC - 20.0f) * chCal[idx].tempCompKgPerC);
+    }
   }
   return r;
 }
 
 String formatTimestampISO8601() {
   struct tm timeinfo;
-  if (!getLocalTime(&timeinfo, 1000)) return "";
+  if (!getLocalTime(&timeinfo, 1000)) {
+    return "";
+  }
   char buf[32];
   strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &timeinfo);
   return String(buf);
@@ -503,7 +538,7 @@ String buildTelemetryPayload(float temperatureC, float batteryV, int rssi, Chann
   doc["battery_v"] = batteryV;
   doc["rssi"] = rssi;
   doc["sleep_seconds"] = (int)cfg.sleepSeconds;
-  doc["firmware_version"] = "esp32-telemetry-v7-full-debug";
+  doc["firmware_version"] = "esp32-telemetry-v7-full-debug-v4-edit-cal";
   doc["active_hives"] = cfg.activeHives;
 
   if (cfg.gtsStartConfigured) {
@@ -570,8 +605,12 @@ void configureOTA() {
   ArduinoOTA.setHostname(cfg.deviceID.c_str());
   ArduinoOTA.onStart([]() { DBG("OTA start"); });
   ArduinoOTA.onEnd([]() { DBG("OTA end"); });
-  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) { (void)progress; (void)total; });
-  ArduinoOTA.onError([](ota_error_t error) { DBG("OTA error=%d", (int)error); });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    (void)progress; (void)total;
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    DBG("OTA error=%d", (int)error);
+  });
   ArduinoOTA.begin();
   otaStartedAt = millis();
   otaActive = true;
@@ -586,7 +625,7 @@ void enterDeepSleep() {
 }
 
 void handleRoot() {
-  String html = htmlHeader("BeeWeight Setup");
+  String html = htmlHeader("BeeLife Setup");
   html += "<div class='box'><form method='POST' action='/save'>";
   html += "<label>WLAN SSID</label><input name='wifi_ssid' value='" + cfg.wifiSSID + "'>";
   html += "<label>WLAN Passwort</label><input name='wifi_pass' type='password' value='" + cfg.wifiPassword + "'>";
@@ -734,9 +773,18 @@ void handleCalibrationPage() {
     html += "<form method='POST' action='/calibration-clear'><input type='hidden' name='idx' value='" + String(i) + "'><button type='submit'>Kalibrierung loeschen</button></form>";
     html += "<ul>";
     for (int j = 0; j < chCal[i].count; j++) {
-      html += "<li>raw=" + String(chCal[i].points[j].raw, 2) + " -> kg=" + String(chCal[i].points[j].kg, 3);
-      html += " <a href='/calibration-delete?idx=" + String(i) + "&p=" + String(j) + "'>loeschen</a></li>";
-    }
+    html += "<li>";
+    html += "raw=" + String(chCal[i].points[j].raw, 2);
+    html += "<form method='POST' action='/calibration-edit' style='margin-top:6px'>";
+    html += "<input type='hidden' name='idx' value='" + String(i) + "'>";
+    html += "<input type='hidden' name='p' value='" + String(j) + "'>";
+    html += "<label>Referenzgewicht Punkt " + String(j) + " (kg)</label>";
+    html += "<input name='kg' value='" + String(chCal[i].points[j].kg, 3) + "'>";
+    html += "<button type='submit'>Gewicht aktualisieren</button>";
+    html += "</form>";
+    html += "<a href='/calibration-delete?idx=" + String(i) + "&p=" + String(j) + "'>loeschen</a>";
+    html += "</li>";
+  }
     html += "</ul></div>";
   }
   html += "<a href='/'>Zurueck</a></body></html>";
@@ -745,7 +793,7 @@ void handleCalibrationPage() {
 
 void handleCalibrationCapture() {
   int idx = server.arg("idx").toInt();
-  float kg = server.arg("kg").toFloat();
+  float kg = parseLocalizedFloat(server.arg("kg"));
   if (idx < 0 || idx >= cfg.activeChannels) {
     server.send(400, "text/plain", "ungueltiger Kanal");
     return;
@@ -754,13 +802,19 @@ void handleCalibrationCapture() {
     server.send(400, "text/plain", "Maximale Punkte erreicht");
     return;
   }
+  if (kg <= 0.0f) {
+    server.send(400, "text/plain", "Referenzgewicht muss > 0 sein");
+    return;
+  }
   float raw = readHXRawAvg(idx, 10);
   chCal[idx].points[chCal[idx].count].raw = raw;
   chCal[idx].points[chCal[idx].count].kg = kg;
   chCal[idx].count++;
+
   String err;
   recomputeCalibrationModel(idx, err);
   saveCalibrationToPrefs(idx);
+
   server.sendHeader("Location", "/calibration");
   server.send(302, "text/plain", "OK");
 }
@@ -817,7 +871,9 @@ void handleScan() {
   String html = htmlHeader("WLAN Scan");
   int n = WiFi.scanNetworks();
   html += "<ul>";
-  for (int i = 0; i < n; i++) html += "<li>" + WiFi.SSID(i) + " (" + String(WiFi.RSSI(i)) + " dBm)</li>";
+  for (int i = 0; i < n; i++) {
+    html += "<li>" + WiFi.SSID(i) + " (" + String(WiFi.RSSI(i)) + " dBm)</li>";
+  }
   html += "</ul><a href='/'>Zurueck</a></body></html>";
   server.send(200, "text/html", html);
 }
@@ -860,6 +916,7 @@ void startConfigPortal() {
   server.on("/channel-save", HTTP_POST, handleChannelSave);
   server.on("/calibration", handleCalibrationPage);
   server.on("/calibration-capture", HTTP_POST, handleCalibrationCapture);
+  server.on("/calibration-edit", HTTP_POST, handleCalibrationEdit);
   server.on("/calibration-delete", HTTP_GET, handleCalibrationDelete);
   server.on("/calibration-clear", HTTP_POST, handleCalibrationClear);
   server.on("/tempcomp", handleTempCompPage);
@@ -927,6 +984,12 @@ void setup() {
       break;
     }
     DBG("WiFi retry %d/%d fehlgeschlagen", wifiRetry + 1, WIFI_RETRY_MAX);
+    WiFi.disconnect(true, true);
+    delay(300);
+    WiFi.mode(WIFI_OFF);
+    delay(200);
+    WiFi.mode(WIFI_STA);
+    delay(200);
     delay(1000);
   }
   if (!wifiOk) {
@@ -937,7 +1000,7 @@ void setup() {
   DBG("STEP 1: WiFi connected");
 
   setupTimeIfPossible();
-  DBG("STEP 2: scales setup");
+  DBG("STEP 2: time configured");
 
   float temperatureC = readTemperatureC();
   float batteryV = readBatteryVoltage();
@@ -954,6 +1017,7 @@ void setup() {
         readings[i].driftDetected ? 1 : 0,
         readings[i].weightKg,
         readings[i].compensatedWeightKg);
+        
   }
 
   const int MQTT_RETRY_MAX = 3;
@@ -965,6 +1029,10 @@ void setup() {
       break;
     }
     DBG("MQTT retry %d/%d fehlgeschlagen", mqttRetry + 1, MQTT_RETRY_MAX);
+    if (mqttClient.connected()) {
+      mqttClient.disconnect();
+      delay(200);
+    }
     delay(1000);
   }
   if (!mqttOk) {
@@ -979,6 +1047,7 @@ void setup() {
   DBG("STEP 5: payload bytes=%u topic=%s", payload.length(), topic.c_str());
 
   bool published = mqttClient.publish(topic.c_str(), payload.c_str(), true);
+
   for (int i = 0; i < 25; i++) {
     mqttClient.loop();
     delay(20);
@@ -986,8 +1055,31 @@ void setup() {
 
   if (!published) {
     DBG("RETURN PATH: publish failed state=%d", mqttClient.state());
-    startConfigPortal();
-    return;
+
+    bool publishRetryOk = false;
+    for (int retry = 0; retry < 2; ++retry) {
+      DBG("Publish retry %d/2", retry + 1);
+      if (!mqttClient.connected()) {
+        if (!connectMQTT()) {
+          DBG("Publish retry reconnect failed state=%d", mqttClient.state());
+          continue;
+        }
+      }
+      published = mqttClient.publish(topic.c_str(), payload.c_str(), true);
+      for (int i = 0; i < 25; i++) {
+        mqttClient.loop();
+        delay(20);
+      }
+      if (published) {
+        publishRetryOk = true;
+        break;
+      }
+    }
+
+    if (!publishRetryOk) {
+      startConfigPortal();
+      return;
+    }
   }
 
   DBG("STEP 6: publish ok");
@@ -1007,12 +1099,14 @@ void setup() {
   }
 
   DBG("STEP 9: disconnect before sleep");
+
   if (mqttClient.connected()) {
     DBG("MQTT flush before disconnect");
     for (int i = 0; i < 20; i++) {
       mqttClient.loop();
       delay(20);
     }
+
     DBG("MQTT disconnect");
     mqttClient.disconnect();
     delay(500);
@@ -1035,4 +1129,42 @@ void loop() {
     ArduinoOTA.handle();
     if (mqttClient.connected()) mqttClient.loop();
   }
+}
+
+void updateCalibrationPointKg(int idx, int pointIdx, float kg) {
+  if (idx < 0 || idx >= MAX_CHANNELS) return;
+  if (pointIdx < 0 || pointIdx >= chCal[idx].count) return;
+  if (kg <= 0.0f) return;
+
+  chCal[idx].points[pointIdx].kg = kg;
+
+  String err;
+  recomputeCalibrationModel(idx, err);
+  saveCalibrationToPrefs(idx);
+}
+
+void handleCalibrationEdit() {
+  int idx = server.arg("idx").toInt();
+  int p = server.arg("p").toInt();
+  float kg = parseLocalizedFloat(server.arg("kg"));
+
+  if (idx < 0 || idx >= cfg.activeChannels) {
+    server.send(400, "text/plain", "ungueltiger Kanal");
+    return;
+  }
+
+  if (p < 0 || p >= chCal[idx].count) {
+    server.send(400, "text/plain", "ungueltiger Punkt");
+    return;
+  }
+
+  if (kg <= 0.0f) {
+    server.send(400, "text/plain", "Referenzgewicht muss > 0 sein");
+    return;
+  }
+
+  updateCalibrationPointKg(idx, p, kg);
+
+  server.sendHeader("Location", "/calibration");
+  server.send(302, "text/plain", "OK");
 }
