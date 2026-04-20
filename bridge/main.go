@@ -51,6 +51,8 @@ type ChannelTelemetry struct {
 	RawSlope            *float64 `json:"raw_slope"`
 	WeightKG            *float64 `json:"weight_kg"`
 	CompensatedWeightKG *float64 `json:"compensated_weight_kg"`
+	CalScale            *float64 `json:"cal_scale"`
+	CalOffset           *float64 `json:"cal_offset"`
 }
 
 type HiveTelemetry struct {
@@ -150,6 +152,24 @@ func stringToNull(v string) sql.NullString {
 	return sql.NullString{String: v, Valid: true}
 }
 
+func computeWeightKG(rawAvg, scale, offset *float64) *float64 {
+	if rawAvg == nil || scale == nil || offset == nil {
+		return nil
+	}
+	v := *scale**rawAvg + *offset
+	return &v
+}
+
+func resolveWeightKG(device, bridge *float64) float64 {
+	if device != nil && *device != 0 {
+		return *device
+	}
+	if bridge != nil && *bridge != 0 {
+		return *bridge
+	}
+	return 0
+}
+
 func insertPayload(ctx context.Context, db *sql.DB, payload TelemetryPayload, raw []byte) error {
 	if payload.DeviceID == "" {
 		return errors.New("device_id is required")
@@ -219,6 +239,8 @@ func insertPayload(ctx context.Context, db *sql.DB, payload TelemetryPayload, ra
 	}
 
 	for _, ch := range payload.Channels {
+		bridgeWeight := computeWeightKG(ch.RawAvg, ch.CalScale, ch.CalOffset)
+		resolvedWeight := resolveWeightKG(ch.WeightKG, bridgeWeight)
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO channel_telemetry (
 				device_telemetry_id, device_id, channel_index, channel_name, hive_index, hive_name,
@@ -245,7 +267,7 @@ func insertPayload(ctx context.Context, db *sql.DB, payload TelemetryPayload, ra
 			floatToNull(ch.RawMax),
 			floatToNull(ch.RawStdDev),
 			floatToNull(ch.RawSlope),
-			floatToNull(ch.WeightKG),
+			resolvedWeight,
 			floatToNull(ch.CompensatedWeightKG),
 			eventTime,
 		)

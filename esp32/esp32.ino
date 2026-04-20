@@ -45,7 +45,7 @@ const float ADC_REFERENCE_VOLT = 3.3f;
 const int ADC_MAX = 4095;
 
 const int SENSOR_WARMUP_MS = 1000;
-const float STABLE_STDDEV_THRESHOLD = 50.0f;
+const float STABLE_STDDEV_THRESHOLD = 100.0f;
 const float DRIFT_SLOPE_THRESHOLD = 10.0f;
 
 #define DBG(fmt, ...) do { Serial.printf("[DBG] " fmt "\n", ##__VA_ARGS__); } while(0)
@@ -244,6 +244,7 @@ bool recomputeCalibrationModelInMemory(int idx, String& errorMsg) {
 }
 
 void resetConfig() {
+  prefs.begin("beeweight", false);
   prefs.clear();
   prefs.end();
   setDefaultConfig();
@@ -549,7 +550,9 @@ ChannelReading readChannel(int idx, float temperatureC) {
   r.stable = r.rawStdDev <= STABLE_STDDEV_THRESHOLD;
   r.driftDetected = fabs(r.rawSlope) >= DRIFT_SLOPE_THRESHOLD;
   r.calibrated = chCal[idx].validModel;
-  if (chCal[idx].validModel) {
+  DBG("CH %d cal valid=%d scale=%.8f offset=%.4f rawAvg=%.2f",
+      idx, chCal[idx].validModel ? 1 : 0, chCal[idx].scale, chCal[idx].offset, r.rawAvg);
+  if (r.ready && r.calibrated) {
     r.weightKg = chCal[idx].scale * r.rawAvg + chCal[idx].offset;
     r.compensatedWeightKg = r.weightKg;
     if (!isnan(temperatureC)) {
@@ -610,8 +613,10 @@ String buildTelemetryPayload(float temperatureC, float batteryV, int rssi, Chann
     ch["raw_max"] = readings[i].rawMax;
     ch["raw_stddev"] = readings[i].rawStdDev;
     ch["raw_slope"] = readings[i].rawSlope;
-    ch["weight_kg"] = readings[i].weightKg;
-    ch["compensated_weight_kg"] = readings[i].compensatedWeightKg;
+    ch["weight_kg"] = (double)readings[i].weightKg;
+    ch["compensated_weight_kg"] = (double)readings[i].compensatedWeightKg;
+    ch["cal_scale"] = chCal[i].scale;
+    ch["cal_offset"] = chCal[i].offset;
 
     int hiveIdx = chCfg[i].hiveIndex;
     if (hiveIdx >= 0 && hiveIdx < MAX_HIVES) {
@@ -627,8 +632,8 @@ String buildTelemetryPayload(float temperatureC, float batteryV, int rssi, Chann
     obj["hive_index"] = h;
     obj["hive_name"] = "Beute " + String(h);
     obj["channel_count"] = hiveChannelCount[h];
-    obj["weight_kg"] = hiveWeight[h];
-    obj["compensated_weight_kg"] = hiveCompWeight[h];
+    obj["weight_kg"] = (double)hiveWeight[h];
+    obj["compensated_weight_kg"] = (double)hiveCompWeight[h];
   }
 
   String out;
@@ -807,7 +812,7 @@ void handleCalibrationPage() {
   String html = htmlHeader("Kalibrierung");
   for (int i = 0; i < cfg.activeChannels; i++) {
     html += "<div class='box'><h3>Kanal " + String(i) + "</h3>";
-    html += "<p>Valid: " + String(chCal[i].validModel ? "Ja" : "Nein") + " | Punkte: " + String(chCal[i].count) + "</p>";
+    html += "<p>Valid: " + String(chCal[i].validModel ? "Ja" : "Nein") + " | Punkte: " + String(chCal[i].count) + " | Scale: " + String(chCal[i].scale, 8) + " | Offset: " + String(chCal[i].offset, 4) + "</p>";
     html += "<form method='POST' action='/calibration-capture'>";
     html += "<input type='hidden' name='idx' value='" + String(i) + "'>";
     html += "<label>Referenzgewicht (kg)</label><input name='kg'>";
@@ -816,7 +821,7 @@ void handleCalibrationPage() {
     html += "<ul>";
     for (int j = 0; j < chCal[i].count; j++) {
     html += "<li>";
-    html += "raw=" + String(chCal[i].points[j].raw, 2);
+    html += "raw=" + String(chCal[i].points[j].raw, 2) + " kg=" + String(chCal[i].points[j].kg, 3);
     html += "<form method='POST' action='/calibration-edit' style='margin-top:6px'>";
     html += "<input type='hidden' name='idx' value='" + String(i) + "'>";
     html += "<input type='hidden' name='p' value='" + String(j) + "'>";
