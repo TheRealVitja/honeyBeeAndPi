@@ -207,7 +207,7 @@ void saveCalibrationToPrefs(int idx) {
 
 void resetConfig() {
   prefs.clear();
-
+  prefs.end();
   setDefaultConfig();
 }
 
@@ -267,7 +267,7 @@ bool loadConfig() {
       chCal[i].validModel = false;
     }
   }
-
+  prefs.end();
   bool ok = cfg.wifiSSID.length() > 0 && cfg.mqttHost.length() > 0 && cfg.deviceID.length() > 0;
   return ok;
 }
