@@ -207,6 +207,7 @@ void saveCalibrationToPrefs(int idx) {
 
 void resetConfig() {
   prefs.clear();
+
   setDefaultConfig();
 }
 
@@ -266,7 +267,9 @@ bool loadConfig() {
       chCal[i].validModel = false;
     }
   }
-  return cfg.wifiSSID.length() > 0 && cfg.mqttHost.length() > 0 && cfg.deviceID.length() > 0;
+
+  bool ok = cfg.wifiSSID.length() > 0 && cfg.mqttHost.length() > 0 && cfg.deviceID.length() > 0;
+  return ok;
 }
 
 bool connectWiFiWithCredentials(const String& ssid, const String& password, unsigned long timeoutMs) {
@@ -717,6 +720,7 @@ void handleSave() {
   saveBasicConfig();
 
   DBG("handleSave saved config sleepSeconds=%lu otaWindowMs=%lu", cfg.sleepSeconds, cfg.otaWindowMs);
+
   server.send(200, "text/plain", "Konfiguration gespeichert. Neustart...");
   delay(1000);
   ESP.restart();
@@ -815,6 +819,8 @@ void handleCalibrationCapture() {
   recomputeCalibrationModel(idx, err);
   saveCalibrationToPrefs(idx);
 
+
+
   server.sendHeader("Location", "/calibration");
   server.send(302, "text/plain", "OK");
 }
@@ -823,6 +829,7 @@ void handleCalibrationDelete() {
   int idx = server.arg("idx").toInt();
   int p = server.arg("p").toInt();
   removeCalibrationPoint(idx, p);
+
   server.sendHeader("Location", "/calibration");
   server.send(302, "text/plain", "OK");
 }
@@ -830,6 +837,7 @@ void handleCalibrationDelete() {
 void handleCalibrationClear() {
   int idx = server.arg("idx").toInt();
   clearCalibration(idx);
+
   server.sendHeader("Location", "/calibration");
   server.send(302, "text/plain", "OK");
 }
@@ -900,6 +908,44 @@ void handleReset() {
   server.send(200, "text/plain", "Konfiguration geloescht. Neustart...");
   delay(1000);
   ESP.restart();
+}
+
+void updateCalibrationPointKg(int idx, int pointIdx, float kg) {
+  if (idx < 0 || idx >= MAX_CHANNELS) return;
+  if (pointIdx < 0 || pointIdx >= chCal[idx].count) return;
+  if (kg <= 0.0f) return;
+
+  chCal[idx].points[pointIdx].kg = kg;
+
+  String err;
+  recomputeCalibrationModel(idx, err);
+  saveCalibrationToPrefs(idx);
+}
+
+void handleCalibrationEdit() {
+  int idx = server.arg("idx").toInt();
+  int p = server.arg("p").toInt();
+  float kg = parseLocalizedFloat(server.arg("kg"));
+
+  if (idx < 0 || idx >= cfg.activeChannels) {
+    server.send(400, "text/plain", "ungueltiger Kanal");
+    return;
+  }
+
+  if (p < 0 || p >= chCal[idx].count) {
+    server.send(400, "text/plain", "ungueltiger Punkt");
+    return;
+  }
+
+  if (kg <= 0.0f) {
+    server.send(400, "text/plain", "Referenzgewicht muss > 0 sein");
+    return;
+  }
+
+  updateCalibrationPointKg(idx, p, kg);
+
+  server.sendHeader("Location", "/calibration");
+  server.send(302, "text/plain", "OK");
 }
 
 void startConfigPortal() {
@@ -1129,42 +1175,4 @@ void loop() {
     ArduinoOTA.handle();
     if (mqttClient.connected()) mqttClient.loop();
   }
-}
-
-void updateCalibrationPointKg(int idx, int pointIdx, float kg) {
-  if (idx < 0 || idx >= MAX_CHANNELS) return;
-  if (pointIdx < 0 || pointIdx >= chCal[idx].count) return;
-  if (kg <= 0.0f) return;
-
-  chCal[idx].points[pointIdx].kg = kg;
-
-  String err;
-  recomputeCalibrationModel(idx, err);
-  saveCalibrationToPrefs(idx);
-}
-
-void handleCalibrationEdit() {
-  int idx = server.arg("idx").toInt();
-  int p = server.arg("p").toInt();
-  float kg = parseLocalizedFloat(server.arg("kg"));
-
-  if (idx < 0 || idx >= cfg.activeChannels) {
-    server.send(400, "text/plain", "ungueltiger Kanal");
-    return;
-  }
-
-  if (p < 0 || p >= chCal[idx].count) {
-    server.send(400, "text/plain", "ungueltiger Punkt");
-    return;
-  }
-
-  if (kg <= 0.0f) {
-    server.send(400, "text/plain", "Referenzgewicht muss > 0 sein");
-    return;
-  }
-
-  updateCalibrationPointKg(idx, p, kg);
-
-  server.sendHeader("Location", "/calibration");
-  server.send(302, "text/plain", "OK");
 }
