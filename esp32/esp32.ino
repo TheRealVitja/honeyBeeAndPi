@@ -167,6 +167,7 @@ void setDefaultConfig() {
 }
 
 void saveBasicConfig() {
+  prefs.begin("beeweight", false);
   prefs.putString("wifi_ssid", cfg.wifiSSID);
   prefs.putString("wifi_pass", cfg.wifiPassword);
   prefs.putString("mqtt_host", cfg.mqttHost);
@@ -181,18 +182,22 @@ void saveBasicConfig() {
   prefs.putInt("gts_year", cfg.gtsStartYear);
   prefs.putFloat("gts_value", cfg.gtsStartValue);
   prefs.putBool("gts_cfg", cfg.gtsStartConfigured);
+  prefs.end();
 }
 
 void saveChannelConfig(int idx) {
+  prefs.begin("beeweight", false);
   String p = "ch" + String(idx) + "_";
   prefs.putBool((p + "en").c_str(), chCfg[idx].enabled);
   prefs.putInt((p + "dout").c_str(), chCfg[idx].doutPin);
   prefs.putInt((p + "sck").c_str(), chCfg[idx].sckPin);
   prefs.putInt((p + "hive").c_str(), chCfg[idx].hiveIndex);
   prefs.putString((p + "name").c_str(), chCfg[idx].channelName);
+  prefs.end();
 }
 
 void saveCalibrationToPrefs(int idx) {
+  prefs.begin("beeweight", false);
   String p = "cal" + String(idx) + "_";
   prefs.putInt((p + "cnt").c_str(), chCal[idx].count);
   prefs.putBool((p + "valid").c_str(), chCal[idx].validModel);
@@ -203,6 +208,39 @@ void saveCalibrationToPrefs(int idx) {
     prefs.putFloat((p + "raw" + String(i)).c_str(), chCal[idx].points[i].raw);
     prefs.putFloat((p + "kg" + String(i)).c_str(), chCal[idx].points[i].kg);
   }
+  prefs.end();
+}
+
+bool recomputeCalibrationModelInMemory(int idx, String& errorMsg) {
+  if (chCal[idx].count < 2) {
+    chCal[idx].validModel = false;
+    errorMsg = "Mindestens 2 Kalibrierpunkte noetig";
+    return false;
+  }
+
+  float sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+  for (int i = 0; i < chCal[idx].count; i++) {
+    float x = chCal[idx].points[i].raw;
+    float y = chCal[idx].points[i].kg;
+    sumX += x;
+    sumY += y;
+    sumXY += x * y;
+    sumXX += x * x;
+  }
+
+  float n = (float)chCal[idx].count;
+  float denom = n * sumXX - sumX * sumX;
+  if (fabs(denom) < 0.0001f) {
+    chCal[idx].validModel = false;
+    errorMsg = "Kalibriermodell nicht berechenbar";
+    return false;
+  }
+
+  chCal[idx].scale = (n * sumXY - sumX * sumY) / denom;
+  chCal[idx].offset = (sumY - chCal[idx].scale * sumX) / n;
+  chCal[idx].validModel = true;
+  errorMsg = "";
+  return true;
 }
 
 void resetConfig() {
@@ -262,7 +300,7 @@ bool loadConfig() {
     }
     String err;
     if (chCal[i].count >= 2) {
-      recomputeCalibrationModel(i, err);
+      recomputeCalibrationModelInMemory(i, err);
     } else {
       chCal[i].validModel = false;
     }
@@ -806,10 +844,7 @@ void handleCalibrationCapture() {
     server.send(400, "text/plain", "Maximale Punkte erreicht");
     return;
   }
-  if (kg <= 0.0f) {
-    server.send(400, "text/plain", "Referenzgewicht muss > 0 sein");
-    return;
-  }
+
   float raw = readHXRawAvg(idx, 10);
   chCal[idx].points[chCal[idx].count].raw = raw;
   chCal[idx].points[chCal[idx].count].kg = kg;
