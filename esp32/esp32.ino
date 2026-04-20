@@ -299,10 +299,7 @@ bool loadConfig() {
       chCal[i].points[j].raw = prefs.getFloat((cp + "raw" + String(j)).c_str(), 0.0f);
       chCal[i].points[j].kg = prefs.getFloat((cp + "kg" + String(j)).c_str(), 0.0f);
     }
-    String err;
-    if (chCal[i].count >= 2) {
-      recomputeCalibrationModelInMemory(i, err);
-    } else {
+    if (chCal[i].count < 2) {
       chCal[i].validModel = false;
     }
   }
@@ -578,8 +575,8 @@ String buildTelemetryPayload(float temperatureC, float batteryV, int rssi, Chann
   doc["device_id"] = cfg.deviceID;
   String ts = formatTimestampISO8601();
   if (ts.length()) doc["timestamp"] = ts;
-  if (!isnan(temperatureC)) doc["temperature_c"] = temperatureC;
-  doc["battery_v"] = batteryV;
+  if (!isnan(temperatureC)) doc["temperature_c"] = (double)temperatureC;
+  doc["battery_v"] = (double)batteryV;
   doc["rssi"] = rssi;
   doc["sleep_seconds"] = (int)cfg.sleepSeconds;
   doc["firmware_version"] = "esp32-telemetry-v7-full-debug-v4-edit-cal";
@@ -608,15 +605,15 @@ String buildTelemetryPayload(float temperatureC, float batteryV, int rssi, Chann
     ch["drift_detected"] = readings[i].driftDetected;
     ch["calibrated"] = readings[i].calibrated;
     ch["samples"] = readings[i].samples;
-    ch["raw_avg"] = readings[i].rawAvg;
-    ch["raw_min"] = readings[i].rawMin;
-    ch["raw_max"] = readings[i].rawMax;
-    ch["raw_stddev"] = readings[i].rawStdDev;
-    ch["raw_slope"] = readings[i].rawSlope;
+    ch["raw_avg"] = (double)readings[i].rawAvg;
+    ch["raw_min"] = (double)readings[i].rawMin;
+    ch["raw_max"] = (double)readings[i].rawMax;
+    ch["raw_stddev"] = (double)readings[i].rawStdDev;
+    ch["raw_slope"] = (double)readings[i].rawSlope;
     ch["weight_kg"] = (double)readings[i].weightKg;
     ch["compensated_weight_kg"] = (double)readings[i].compensatedWeightKg;
-    ch["cal_scale"] = chCal[i].scale;
-    ch["cal_offset"] = chCal[i].offset;
+    ch["cal_scale"] = (double)chCal[i].scale;
+    ch["cal_offset"] = (double)chCal[i].offset;
 
     int hiveIdx = chCfg[i].hiveIndex;
     if (hiveIdx >= 0 && hiveIdx < MAX_HIVES) {
