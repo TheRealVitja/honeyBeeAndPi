@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -61,6 +63,31 @@ type HiveTelemetry struct {
 	ChannelCount        *int     `json:"channel_count"`
 	WeightKG            *float64 `json:"weight_kg"`
 	CompensatedWeightKG *float64 `json:"compensated_weight_kg"`
+}
+
+type ChannelCalibration struct {
+	Scale  *float64
+	Offset *float64
+}
+
+func loadChannelCalibrations() map[int]ChannelCalibration {
+	cals := make(map[int]ChannelCalibration)
+	for i := 0; ; i++ {
+		scaleStr := strings.TrimSpace(os.Getenv(fmt.Sprintf("HIVE_CANAL_%d_SCALE", i)))
+		offsetStr := strings.TrimSpace(os.Getenv(fmt.Sprintf("HIVE_CANAL_%d_OFFSET", i)))
+		if scaleStr == "" && offsetStr == "" {
+			break
+		}
+		cal := ChannelCalibration{}
+		if s, err := strconv.ParseFloat(scaleStr, 64); err == nil {
+			cal.Scale = &s
+		}
+		if o, err := strconv.ParseFloat(offsetStr, 64); err == nil {
+			cal.Offset = &o
+		}
+		cals[i] = cal
+	}
+	return cals
 }
 
 func getenvDefault(key, fallback string) string {
@@ -160,17 +187,7 @@ func computeWeightKG(rawAvg, scale, offset *float64) *float64 {
 	return &v
 }
 
-func resolveWeightKG(device, bridge *float64) float64 {
-	if device != nil && *device != 0 {
-		return *device
-	}
-	if bridge != nil && *bridge != 0 {
-		return *bridge
-	}
-	return 0
-}
-
-func insertPayload(ctx context.Context, db *sql.DB, payload TelemetryPayload, raw []byte) error {
+func insertPayload(ctx context.Context, db *sql.DB, payload TelemetryPayload, cals map[int]ChannelCalibration, raw []byte) error {
 	if payload.DeviceID == "" {
 		return errors.New("device_id is required")
 	}
@@ -217,6 +234,29 @@ func insertPayload(ctx context.Context, db *sql.DB, payload TelemetryPayload, ra
 		return err
 	}
 
+	// compute per-channel weight from env calibration, accumulate per hive
+	hiveWeights := make(map[int]*float64)
+	channelWeights := make(map[int]*float64)
+	for _, ch := range payload.Channels {
+		cal, ok := cals[ch.ChannelIndex]
+		if !ok {
+			log.Printf("warn: no calibration for channel %d", ch.ChannelIndex)
+			continue
+		}
+		w := computeWeightKG(ch.RawAvg, cal.Scale, cal.Offset)
+		channelWeights[ch.ChannelIndex] = w
+		if w != nil && ch.HiveIndex != nil {
+			idx := *ch.HiveIndex
+			if existing := hiveWeights[idx]; existing != nil {
+				sum := *existing + *w
+				hiveWeights[idx] = &sum
+			} else {
+				v := *w
+				hiveWeights[idx] = &v
+			}
+		}
+	}
+
 	for _, h := range payload.Hives {
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO hive_telemetry (
@@ -229,7 +269,7 @@ func insertPayload(ctx context.Context, db *sql.DB, payload TelemetryPayload, ra
 			h.HiveIndex,
 			stringToNull(h.HiveName),
 			intToNullInt(h.ChannelCount),
-			floatToNull(h.WeightKG),
+			floatToNull(hiveWeights[h.HiveIndex]),
 			floatToNull(h.CompensatedWeightKG),
 			eventTime,
 		)
@@ -239,8 +279,6 @@ func insertPayload(ctx context.Context, db *sql.DB, payload TelemetryPayload, ra
 	}
 
 	for _, ch := range payload.Channels {
-		bridgeWeight := computeWeightKG(ch.RawAvg, ch.CalScale, ch.CalOffset)
-		resolvedWeight := resolveWeightKG(ch.WeightKG, bridgeWeight)
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO channel_telemetry (
 				device_telemetry_id, device_id, channel_index, channel_name, hive_index, hive_name,
@@ -267,7 +305,7 @@ func insertPayload(ctx context.Context, db *sql.DB, payload TelemetryPayload, ra
 			floatToNull(ch.RawMax),
 			floatToNull(ch.RawStdDev),
 			floatToNull(ch.RawSlope),
-			resolvedWeight,
+			floatToNull(channelWeights[ch.ChannelIndex]),
 			floatToNull(ch.CompensatedWeightKG),
 			eventTime,
 		)
@@ -282,6 +320,9 @@ func insertPayload(ctx context.Context, db *sql.DB, payload TelemetryPayload, ra
 func main() {
 	db := mustOpenDB()
 	defer db.Close()
+
+	cals := loadChannelCalibrations()
+	log.Printf("loaded calibrations for %d channel(s)", len(cals))
 
 	mqttBroker := getenvDefault("MQTT_BROKER", "tcp://localhost:1883")
 	mqttTopic := getenvDefault("MQTT_TOPIC", "devices/+/telemetry")
@@ -307,7 +348,7 @@ func main() {
 				return
 			}
 
-			if err := insertPayload(ctx, db, payload, msg.Payload()); err != nil {
+			if err := insertPayload(ctx, db, payload, cals, msg.Payload()); err != nil {
 				log.Printf("insert payload failed device=%s topic=%s: %v", payload.DeviceID, msg.Topic(), err)
 				return
 			}

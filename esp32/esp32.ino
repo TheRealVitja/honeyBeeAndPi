@@ -71,9 +71,9 @@ struct ChannelCalibration {
   int count = 0;
   CalibrationPoint points[MAX_CAL_POINTS];
   bool validModel = false;
-  float scale = 1.0f;
-  float offset = 0.0f;
-  float tempCompKgPerC = 0.0f;
+  double scale = 1.0;
+  double offset = 0.0;
+  double tempCompKgPerC = 0.0;
 };
 
 struct ChannelConfig {
@@ -112,8 +112,8 @@ struct ChannelReading {
   float rawMax = 0.0f;
   float rawStdDev = 0.0f;
   float rawSlope = 0.0f;
-  float weightKg = 0.0f;
-  float compensatedWeightKg = 0.0f;
+  double weightKg = 0.0;
+  double compensatedWeightKg = 0.0;
 };
 
 RuntimeConfig cfg;
@@ -201,9 +201,9 @@ void saveCalibrationToPrefs(int idx) {
   String p = "cal" + String(idx) + "_";
   prefs.putInt((p + "cnt").c_str(), chCal[idx].count);
   prefs.putBool((p + "valid").c_str(), chCal[idx].validModel);
-  prefs.putFloat((p + "scale").c_str(), chCal[idx].scale);
-  prefs.putFloat((p + "offset").c_str(), chCal[idx].offset);
-  prefs.putFloat((p + "tcomp").c_str(), chCal[idx].tempCompKgPerC);
+  prefs.putDouble((p + "scale").c_str(), chCal[idx].scale);
+  prefs.putDouble((p + "offset").c_str(), chCal[idx].offset);
+  prefs.putDouble((p + "tcomp").c_str(), chCal[idx].tempCompKgPerC);
   for (int i = 0; i < MAX_CAL_POINTS; i++) {
     prefs.putFloat((p + "raw" + String(i)).c_str(), chCal[idx].points[i].raw);
     prefs.putFloat((p + "kg" + String(i)).c_str(), chCal[idx].points[i].kg);
@@ -218,26 +218,28 @@ bool recomputeCalibrationModelInMemory(int idx, String& errorMsg) {
     return false;
   }
 
-  float sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+  double sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
   for (int i = 0; i < chCal[idx].count; i++) {
-    float x = chCal[idx].points[i].raw;
-    float y = chCal[idx].points[i].kg;
+    double x = chCal[idx].points[i].raw;
+    double y = chCal[idx].points[i].kg;
     sumX += x;
     sumY += y;
     sumXY += x * y;
     sumXX += x * x;
   }
 
-  float n = (float)chCal[idx].count;
-  float denom = n * sumXX - sumX * sumX;
-  if (fabs(denom) < 0.0001f) {
+  double n = (double)chCal[idx].count;
+  double denom = n * sumXX - sumX * sumX;
+  if (fabs(denom) < 0.0001) {
     chCal[idx].validModel = false;
     errorMsg = "Kalibriermodell nicht berechenbar";
     return false;
   }
 
-  chCal[idx].scale = (n * sumXY - sumX * sumY) / denom;
-  chCal[idx].offset = (sumY - chCal[idx].scale * sumX) / n;
+  double scale_d = (n * sumXY - sumX * sumY) / denom;
+  double offset_d = (sumY - scale_d * sumX) / n;
+  chCal[idx].scale = scale_d;
+  chCal[idx].offset = offset_d;
   chCal[idx].validModel = true;
   errorMsg = "";
   return true;
@@ -292,14 +294,17 @@ bool loadConfig() {
     String cp = "cal" + String(i) + "_";
     chCal[i].count = prefs.getInt((cp + "cnt").c_str(), 0);
     chCal[i].validModel = prefs.getBool((cp + "valid").c_str(), false);
-    chCal[i].scale = prefs.getFloat((cp + "scale").c_str(), 1.0f);
-    chCal[i].offset = prefs.getFloat((cp + "offset").c_str(), 0.0f);
-    chCal[i].tempCompKgPerC = prefs.getFloat((cp + "tcomp").c_str(), 0.0f);
+    chCal[i].scale = prefs.getDouble((cp + "scale").c_str(), 1.0);
+    chCal[i].offset = prefs.getDouble((cp + "offset").c_str(), 0.0);
+    chCal[i].tempCompKgPerC = prefs.getDouble((cp + "tcomp").c_str(), 0.0);
     for (int j = 0; j < MAX_CAL_POINTS; j++) {
       chCal[i].points[j].raw = prefs.getFloat((cp + "raw" + String(j)).c_str(), 0.0f);
       chCal[i].points[j].kg = prefs.getFloat((cp + "kg" + String(j)).c_str(), 0.0f);
     }
-    if (chCal[i].count < 2) {
+    String err;
+    if (chCal[i].count >= 2) {
+      recomputeCalibrationModelInMemory(i, err);
+    } else {
       chCal[i].validModel = false;
     }
   }
@@ -449,26 +454,28 @@ bool recomputeCalibrationModel(int idx, String& errorMsg) {
     return false;
   }
 
-  float sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+  double sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
   for (int i = 0; i < chCal[idx].count; i++) {
-    float x = chCal[idx].points[i].raw;
-    float y = chCal[idx].points[i].kg;
+    double x = chCal[idx].points[i].raw;
+    double y = chCal[idx].points[i].kg;
     sumX += x;
     sumY += y;
     sumXY += x * y;
     sumXX += x * x;
   }
 
-  float n = (float)chCal[idx].count;
-  float denom = n * sumXX - sumX * sumX;
-  if (fabs(denom) < 0.0001f) {
+  double n = (double)chCal[idx].count;
+  double denom = n * sumXX - sumX * sumX;
+  if (fabs(denom) < 0.0001) {
     chCal[idx].validModel = false;
     errorMsg = "Kalibriermodell nicht berechenbar";
     return false;
   }
 
-  chCal[idx].scale = (n * sumXY - sumX * sumY) / denom;
-  chCal[idx].offset = (sumY - chCal[idx].scale * sumX) / n;
+  double scale_d = (n * sumXY - sumX * sumY) / denom;
+  double offset_d = (sumY - scale_d * sumX) / n;
+  chCal[idx].scale = scale_d;
+  chCal[idx].offset = offset_d;
   chCal[idx].validModel = true;
   saveCalibrationToPrefs(idx);
   errorMsg = "";
@@ -588,8 +595,8 @@ String buildTelemetryPayload(float temperatureC, float batteryV, int rssi, Chann
   }
 
   JsonArray channels = doc.createNestedArray("channels");
-  float hiveWeight[MAX_HIVES] = {0};
-  float hiveCompWeight[MAX_HIVES] = {0};
+  double hiveWeight[MAX_HIVES] = {0};
+  double hiveCompWeight[MAX_HIVES] = {0};
   int hiveChannelCount[MAX_HIVES] = {0};
 
   for (int i = 0; i < cfg.activeChannels; i++) {
@@ -610,10 +617,10 @@ String buildTelemetryPayload(float temperatureC, float batteryV, int rssi, Chann
     ch["raw_max"] = (double)readings[i].rawMax;
     ch["raw_stddev"] = (double)readings[i].rawStdDev;
     ch["raw_slope"] = (double)readings[i].rawSlope;
-    ch["weight_kg"] = (double)readings[i].weightKg;
-    ch["compensated_weight_kg"] = (double)readings[i].compensatedWeightKg;
-    ch["cal_scale"] = (double)chCal[i].scale;
-    ch["cal_offset"] = (double)chCal[i].offset;
+    ch["weight_kg"] = readings[i].weightKg;
+    ch["compensated_weight_kg"] = readings[i].compensatedWeightKg;
+    ch["cal_scale"] = chCal[i].scale;
+    ch["cal_offset"] = chCal[i].offset;
 
     int hiveIdx = chCfg[i].hiveIndex;
     if (hiveIdx >= 0 && hiveIdx < MAX_HIVES) {
@@ -629,8 +636,8 @@ String buildTelemetryPayload(float temperatureC, float batteryV, int rssi, Chann
     obj["hive_index"] = h;
     obj["hive_name"] = "Beute " + String(h);
     obj["channel_count"] = hiveChannelCount[h];
-    obj["weight_kg"] = (double)hiveWeight[h];
-    obj["compensated_weight_kg"] = (double)hiveCompWeight[h];
+    obj["weight_kg"] = hiveWeight[h];
+    obj["compensated_weight_kg"] = hiveCompWeight[h];
   }
 
   String out;
@@ -696,6 +703,7 @@ void handleRoot() {
 }
 
 void handleSave() {
+  configPortalStartedAt = millis();
   DBG("handleSave start");
   String wifiSSID = server.arg("wifi_ssid");
   String wifiPass = server.arg("wifi_pass");
@@ -788,6 +796,7 @@ void handleChannelsPage() {
 }
 
 void handleChannelSave() {
+  configPortalStartedAt = millis();
   int idx = server.arg("idx").toInt();
   if (idx < 0 || idx >= MAX_CHANNELS) {
     server.send(400, "text/plain", "ungueltiger Kanal");
@@ -836,6 +845,7 @@ void handleCalibrationPage() {
 }
 
 void handleCalibrationCapture() {
+  configPortalStartedAt = millis();
   int idx = server.arg("idx").toInt();
   float kg = parseLocalizedFloat(server.arg("kg"));
   if (idx < 0 || idx >= cfg.activeChannels) {
@@ -863,6 +873,7 @@ void handleCalibrationCapture() {
 }
 
 void handleCalibrationDelete() {
+  configPortalStartedAt = millis();
   int idx = server.arg("idx").toInt();
   int p = server.arg("p").toInt();
   removeCalibrationPoint(idx, p);
@@ -872,6 +883,7 @@ void handleCalibrationDelete() {
 }
 
 void handleCalibrationClear() {
+  configPortalStartedAt = millis();
   int idx = server.arg("idx").toInt();
   clearCalibration(idx);
 
@@ -893,6 +905,7 @@ void handleTempCompPage() {
 }
 
 void handleTempCompSave() {
+  configPortalStartedAt = millis();
   int idx = server.arg("idx").toInt();
   if (idx < 0 || idx >= cfg.activeChannels) {
     server.send(400, "text/plain", "ungueltiger Kanal");
@@ -960,6 +973,7 @@ void updateCalibrationPointKg(int idx, int pointIdx, float kg) {
 }
 
 void handleCalibrationEdit() {
+  configPortalStartedAt = millis();
   int idx = server.arg("idx").toInt();
   int p = server.arg("p").toInt();
   float kg = parseLocalizedFloat(server.arg("kg"));
